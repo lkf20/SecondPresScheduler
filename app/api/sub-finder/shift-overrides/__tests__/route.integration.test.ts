@@ -126,4 +126,37 @@ describe('POST /api/sub-finder/shift-overrides integration', () => {
     expect(response.status).toBe(500)
     expect(json.error).toMatch(/query failed/i)
   })
+
+  it('dedupes selected_shift_ids when a shift key appears in both available and unavailable lists', async () => {
+    mockEq.mockResolvedValueOnce({
+      data: [
+        {
+          id: 'shift-overlap',
+          date: '2026-02-12',
+          time_slot_id: 'slot-2',
+          time_slots: { code: 'LB1' },
+        },
+      ],
+      error: null,
+    })
+
+    const request = createJsonRequest(
+      'http://localhost:3000/api/sub-finder/shift-overrides',
+      'POST',
+      {
+        coverage_request_id: 'coverage-1',
+        selected_shift_keys: ['2026-02-12|LB1'],
+        override_shift_keys: ['2026-02-12|LB1'],
+        available_shift_keys: ['2026-02-12|LB1'],
+        unavailable_shift_keys: ['2026-02-12|LB1'],
+      }
+    )
+
+    const response = await POST(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(json.selected_shift_ids).toEqual(['shift-overlap'])
+    expect(json.shift_overrides).toHaveLength(1)
+  })
 })

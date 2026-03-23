@@ -28,8 +28,12 @@ export async function POST(request: NextRequest) {
     const availableShiftKeys = new Set(
       Array.isArray(body.available_shift_keys) ? body.available_shift_keys : []
     )
-    const unavailableShiftKeys = new Set(
+    const unavailableShiftKeysRaw = new Set(
       Array.isArray(body.unavailable_shift_keys) ? body.unavailable_shift_keys : []
+    )
+    // If a key appears in both lists, treat it as available to avoid duplicate shift mapping.
+    const unavailableShiftKeys = new Set(
+      Array.from(unavailableShiftKeysRaw).filter(key => !availableShiftKeys.has(key))
     )
 
     const supabase = await createClient()
@@ -77,7 +81,7 @@ export async function POST(request: NextRequest) {
       selected: boolean
       override_availability: boolean
     }> = []
-    const selectedShiftIds: string[] = []
+    const selectedShiftIdsSet = new Set<string>()
 
     availableShiftKeys.forEach(key => {
       const shiftIds = shiftIdMap.get(key)
@@ -90,9 +94,7 @@ export async function POST(request: NextRequest) {
           selected,
           override_availability: false,
         })
-        if (selected) {
-          selectedShiftIds.push(shiftId)
-        }
+        if (selected) selectedShiftIdsSet.add(shiftId)
       })
     })
 
@@ -108,11 +110,11 @@ export async function POST(request: NextRequest) {
           selected,
           override_availability: override,
         })
-        if (selected) {
-          selectedShiftIds.push(shiftId)
-        }
+        if (selected) selectedShiftIdsSet.add(shiftId)
       })
     })
+
+    const selectedShiftIds = Array.from(selectedShiftIdsSet)
 
     // Floater slots: (date, time_slot_id) with multiple shifts. All selected ids in such slots are floater.
     const selectedSet = new Set(selectedShiftIds)

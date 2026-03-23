@@ -79,9 +79,12 @@ describe('daily schedule pdf html', () => {
     expect(html).toContain('School Closed')
     expect(html).toContain('Holiday')
     expect(html).toContain('colspan="2"')
+    expect(html).toContain('border:1px solid #64748B')
+    expect(html).not.toContain('>Time<')
+    expect(html).not.toContain('9 am')
   })
 
-  it('uses medium font weight for time range and teacher lines', () => {
+  it('uses stacked slot-code letters in the first column and medium-weight teacher lines', () => {
     const dataWithTeacher = [
       {
         ...baseData[0],
@@ -130,7 +133,10 @@ describe('daily schedule pdf html', () => {
       schoolClosures: [],
     })
 
-    expect(html).toContain('font-size:11px; font-weight:500;')
+    expect(html).toContain(
+      'display:flex; flex-direction:column; align-items:center; justify-content:center; gap:0; line-height:1.0; font-size:13px; font-weight:600; color:#334155;'
+    )
+    expect(html).toContain('<div>A</div><div>M</div>')
     expect(html).toContain(
       'font-size:10px; font-weight:500; line-height:1.2; margin-bottom:1px;">Anne M.'
     )

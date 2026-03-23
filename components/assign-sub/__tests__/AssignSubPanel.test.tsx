@@ -70,6 +70,11 @@ jest.mock('@/components/shared/SearchableSelect', () => {
   return function MockSearchableSelect({ options, value, onValueChange, placeholder }: any) {
     return (
       <div data-testid={`select-${placeholder}`}>
+        {value ? (
+          <button data-testid={`clear-${placeholder}`} onClick={() => onValueChange(null)}>
+            Clear
+          </button>
+        ) : null}
         {options.map((opt: any) => (
           <button
             key={opt.id}
@@ -487,6 +492,88 @@ describe('AssignSubPanel', () => {
     expect(
       screen.queryByText(/No scheduled shifts found for this teacher in the selected date range/i)
     ).not.toBeInTheDocument()
+  })
+
+  it('clears shifts when start date is cleared', async () => {
+    const user = userEvent.setup()
+    renderWithQueryClient(<AssignSubPanel isOpen={true} onClose={jest.fn()} />)
+    await fillForm(user)
+
+    await waitFor(() => {
+      expect(screen.getByText(/Tue Mar 10 • AM • Preschool/i)).toBeInTheDocument()
+    })
+
+    const startDateInput = screen.getByTestId('date-Select start date')
+    fireEvent.change(startDateInput, { target: { value: '' } })
+
+    await waitFor(() => {
+      expect(screen.queryByText(/Tue Mar 10 • AM • Preschool/i)).not.toBeInTheDocument()
+      expect(screen.queryByText(/Tue Mar 10 • PM • Preschool/i)).not.toBeInTheDocument()
+    })
+  })
+
+  it('clears shifts when teacher is cleared', async () => {
+    const user = userEvent.setup()
+    renderWithQueryClient(<AssignSubPanel isOpen={true} onClose={jest.fn()} />)
+    await fillForm(user)
+
+    await waitFor(() => {
+      expect(screen.getByText(/Tue Mar 10 • AM • Preschool/i)).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByTestId('clear-Search or select a teacher...'))
+
+    await waitFor(() => {
+      expect(screen.queryByText(/Tue Mar 10 • AM • Preschool/i)).not.toBeInTheDocument()
+      expect(screen.queryByText(/Tue Mar 10 • PM • Preschool/i)).not.toBeInTheDocument()
+    })
+  })
+
+  it('clears shifts when staff to assign is cleared', async () => {
+    const user = userEvent.setup()
+    renderWithQueryClient(<AssignSubPanel isOpen={true} onClose={jest.fn()} />)
+    await fillForm(user)
+
+    await waitFor(() => {
+      expect(screen.getByText(/Tue Mar 10 • AM • Preschool/i)).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByTestId('clear-Search or select a substitute...'))
+
+    await waitFor(() => {
+      expect(screen.queryByText(/Tue Mar 10 • AM • Preschool/i)).not.toBeInTheDocument()
+      expect(screen.queryByText(/Tue Mar 10 • PM • Preschool/i)).not.toBeInTheDocument()
+    })
+  })
+
+  it('clears shifts when end date is cleared after previously being set', async () => {
+    const user = userEvent.setup()
+    renderWithQueryClient(<AssignSubPanel isOpen={true} onClose={jest.fn()} />)
+    await fillForm(user)
+
+    await waitFor(() => {
+      expect(screen.getByText(/Tue Mar 10 • AM • Preschool/i)).toBeInTheDocument()
+    })
+
+    const endDateInput = screen.getByTestId('date-Select end date')
+    fireEvent.change(endDateInput, { target: { value: '2026-03-11' } })
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/assign-sub/shifts',
+        expect.objectContaining({
+          method: 'POST',
+          body: expect.stringContaining('"end_date":"2026-03-11"'),
+        })
+      )
+    })
+
+    fireEvent.change(endDateInput, { target: { value: '' } })
+
+    await waitFor(() => {
+      expect(screen.queryByText(/Tue Mar 10 • AM • Preschool/i)).not.toBeInTheDocument()
+      expect(screen.queryByText(/Tue Mar 10 • PM • Preschool/i)).not.toBeInTheDocument()
+    })
   })
 
   it('Shifts without time off show time-off-will-be-created message, never extra coverage', async () => {
