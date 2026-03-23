@@ -34,6 +34,14 @@ When a floater teacher’s absence creates **two** `coverage_request_shift` rows
 - **Assign to both rooms (floater)** — both shift ids are included in `selected_shift_ids` (and in conflict/replace resolution as applicable).
 - **Assign to [room] only** — only that shift’s `coverage_request_shift_id` is selected.
 
+This creates a **room-level partial coverage** state for the absence when only one room is selected:
+
+- the selected room shift is covered,
+- the other room shift(s) remain uncovered,
+- and the absence remains actionable in Sub Finder until all room-level shifts are covered.
+
+Room-level partial coverage is distinct from **time-based partial assignment** (`is_partial`, `partial_start_time`, `partial_end_time`).
+
 **During `conflict_sub` or `conflict_teaching`**, the same room scope applies before choosing Floater / Move / Reassign: the director can assign **one absence room only** plus the conflict resolution. Only selected rows are sent to `POST /api/sub-finder/assign-shifts`. **Reassign** remains available for `conflict_teaching` on multi-room absences (per-room scope is respected in the payload).
 
 ---

@@ -1093,11 +1093,18 @@ export default function AssignSubPanel({
 
   // Handle view in Sub Finder
   const handleViewInSubFinder = () => {
-    if (!teacherId || !startDate) return
-    const effectiveEndDate = endDate || startDate
-    router.push(
-      `/sub-finder?teacher_id=${teacherId}&start_date=${startDate}&end_date=${effectiveEndDate}&mode=manual`
-    )
+    const params = new URLSearchParams()
+    if (teacherId) {
+      params.set('teacher_id', teacherId)
+    }
+    if (startDate) {
+      const effectiveEndDate = endDate || startDate
+      params.set('start_date', startDate)
+      params.set('end_date', effectiveEndDate)
+      params.set('mode', 'manual')
+    }
+    const query = params.toString()
+    router.push(query ? `/sub-finder?${query}` : '/sub-finder')
     onClose()
   }
 
@@ -1355,6 +1362,17 @@ export default function AssignSubPanel({
                   }
                   className="w-full"
                 />
+                <p className="text-xs text-slate-600">
+                  Need help finding a sub?{' '}
+                  <button
+                    type="button"
+                    className="font-medium text-teal-700 underline underline-offset-2 hover:text-teal-800"
+                    onClick={handleViewInSubFinder}
+                  >
+                    Go to Sub Finder
+                  </button>
+                  .
+                </p>
                 {selectedSubIsNonSub && selectedSub && (
                   <div className="flex items-center gap-2">
                     <Badge

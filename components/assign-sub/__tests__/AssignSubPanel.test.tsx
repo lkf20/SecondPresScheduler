@@ -362,6 +362,60 @@ describe('AssignSubPanel', () => {
     )
   })
 
+  it('shows Sub Finder helper under staff picker and navigates with teacher/date context', async () => {
+    const user = userEvent.setup()
+    const onClose = jest.fn()
+    renderWithQueryClient(<AssignSubPanel isOpen={true} onClose={onClose} />)
+
+    expect(screen.getByText(/Need help finding a sub/i)).toBeInTheDocument()
+
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('option-Search or select a teacher...-teacher-1')
+      ).toBeInTheDocument()
+    })
+    await user.click(screen.getByTestId('option-Search or select a teacher...-teacher-1'))
+
+    const startDateInput = await screen.findByTestId('date-Select start date')
+    fireEvent.change(startDateInput, { target: { value: '2026-03-10' } })
+
+    await user.click(screen.getByRole('button', { name: /Go to Sub Finder/i }))
+
+    expect(mockPush).toHaveBeenCalledWith(
+      '/sub-finder?teacher_id=teacher-1&start_date=2026-03-10&end_date=2026-03-10&mode=manual'
+    )
+    expect(onClose).toHaveBeenCalled()
+  })
+
+  it('navigates to Sub Finder with teacher only when no date is selected', async () => {
+    const user = userEvent.setup()
+    const onClose = jest.fn()
+    renderWithQueryClient(<AssignSubPanel isOpen={true} onClose={onClose} />)
+
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('option-Search or select a teacher...-teacher-1')
+      ).toBeInTheDocument()
+    })
+    await user.click(screen.getByTestId('option-Search or select a teacher...-teacher-1'))
+
+    await user.click(screen.getByRole('button', { name: /Go to Sub Finder/i }))
+
+    expect(mockPush).toHaveBeenCalledWith('/sub-finder?teacher_id=teacher-1')
+    expect(onClose).toHaveBeenCalled()
+  })
+
+  it('navigates to empty Sub Finder when no teacher/date are prefilled', async () => {
+    const user = userEvent.setup()
+    const onClose = jest.fn()
+    renderWithQueryClient(<AssignSubPanel isOpen={true} onClose={onClose} />)
+
+    await user.click(screen.getByRole('button', { name: /Go to Sub Finder/i }))
+
+    expect(mockPush).toHaveBeenCalledWith('/sub-finder')
+    expect(onClose).toHaveBeenCalled()
+  })
+
   it('clears selected non-sub assignee when override toggle is turned off', async () => {
     const user = userEvent.setup()
     const baseFetch = global.fetch as jest.Mock
