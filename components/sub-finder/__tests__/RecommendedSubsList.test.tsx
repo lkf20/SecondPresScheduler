@@ -164,11 +164,17 @@ describe('RecommendedSubsList', () => {
       />
     )
 
-    expect(screen.getByRole('button', { name: /assigned \(1\)/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /contacted \(1\)/i })).toBeInTheDocument()
+    // Filter pill + section header can both match the same name when "All" is selected.
+    expect(
+      screen.getAllByRole('button', { name: /assigned \(1\)/i }).length
+    ).toBeGreaterThanOrEqual(1)
+    expect(
+      screen.getAllByRole('button', { name: /contacted \(1\)/i }).length
+    ).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByRole('button', { name: /available \(1\)/i }).length).toBeGreaterThan(0)
     await user.click(screen.getByRole('button', { name: /more filters/i }))
     const popover = within(screen.getByRole('dialog'))
+    expect(popover.queryByRole('button', { name: /^all\b/i })).not.toBeInTheDocument()
     expect(popover.getByRole('button', { name: /available with limitations/i })).toBeInTheDocument()
     expect(popover.getByRole('button', { name: /unavailable/i })).toBeInTheDocument()
     expect(popover.getByRole('button', { name: /declined/i })).toBeInTheDocument()
@@ -177,6 +183,60 @@ describe('RecommendedSubsList', () => {
 
     expect(screen.getByText('Unavailable Sub')).toBeInTheDocument()
     expect(screen.queryByText('Available Sub')).not.toBeInTheDocument()
+  })
+
+  it('expands all sections when All filter is active', () => {
+    const subs = [
+      {
+        ...baseSub,
+        id: 'assigned',
+        name: 'Assigned Sub',
+        assigned_shifts: [{ date: '2026-02-09', day_name: 'Monday', time_slot_code: 'EM' }],
+      },
+      { ...baseSub, id: 'contacted', name: 'Contacted Sub', response_status: 'pending' },
+      { ...baseSub, id: 'available', name: 'Available Sub' },
+      { ...baseSub, id: 'limited', name: 'Limited Sub', is_sub: false, is_flexible_staff: true },
+      {
+        ...baseSub,
+        id: 'unavailable',
+        name: 'Unavailable Sub',
+        coverage_percent: 0,
+        shifts_covered: 0,
+        can_cover: [],
+        cannot_cover: [
+          { date: '2026-02-09', day_name: 'Monday', time_slot_code: 'EM', reason: 'Unavailable' },
+        ],
+      },
+      {
+        ...baseSub,
+        id: 'declined',
+        name: 'Declined Sub',
+        response_status: 'declined_all',
+        can_cover: [],
+        cannot_cover: [
+          { date: '2026-02-09', day_name: 'Monday', time_slot_code: 'EM', reason: 'Declined' },
+        ],
+      },
+    ]
+
+    render(
+      <RecommendedSubsList
+        subs={subs as any}
+        loading={false}
+        absence={absence}
+        shiftDetails={shiftDetails}
+        showAllSubs
+        activeFilter={null}
+      />
+    )
+
+    expect(screen.getByRole('button', { name: /^all \(6\)$/i })).toBeInTheDocument()
+    expect(screen.getByText('Assigned Sub')).toBeInTheDocument()
+    expect(screen.getByText('Contacted Sub')).toBeInTheDocument()
+    expect(screen.getByText('Available Sub')).toBeInTheDocument()
+    expect(screen.getByText('Limited Sub')).toBeInTheDocument()
+    expect(screen.getByText('Unavailable Sub')).toBeInTheDocument()
+    expect(screen.getByText('Declined Sub')).toBeInTheDocument()
   })
 
   it('hides header copy when hideHeader is true', () => {

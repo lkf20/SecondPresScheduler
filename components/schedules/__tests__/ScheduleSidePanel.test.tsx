@@ -12,6 +12,7 @@ function renderWithQueryClient(ui: React.ReactElement) {
 }
 
 const pushMock = jest.fn()
+const requestOpenAssignSubMock = jest.fn()
 const toastSuccessMock = jest.fn()
 const toastErrorMock = jest.fn()
 
@@ -35,6 +36,12 @@ jest.mock('@/lib/hooks/use-display-name-format', () => ({
 
 jest.mock('@/lib/contexts/SchoolContext', () => ({
   useSchool: () => 'school-1',
+}))
+
+jest.mock('@/lib/contexts/AssignSubPanelContext', () => ({
+  useAssignSubPanel: () => ({
+    requestOpenAssignSub: (...args: unknown[]) => requestOpenAssignSubMock(...args),
+  }),
 }))
 
 jest.mock('@/components/ui/sheet', () => ({
@@ -127,7 +134,21 @@ jest.mock('@/components/ui/date-picker-input', () => () => <input />)
 
 jest.mock('@/components/time-off/TimeOffForm', () => () => <div>TimeOffForm</div>)
 jest.mock('@/components/schedules/SlotStatusToggle', () => () => <div>SlotStatusToggle</div>)
-jest.mock('@/components/settings/ClassSelector', () => () => <div>ClassSelector</div>)
+jest.mock('@/components/settings/ClassSelector', () => ({
+  __esModule: true,
+  default: ({ onSelectionChange }: { onSelectionChange?: (classIds: string[]) => void }) => (
+    <div>
+      <span>ClassSelector</span>
+      <button
+        type="button"
+        aria-label="Add class group"
+        onClick={() => onSelectionChange?.(['cg-1'])}
+      >
+        Add class group
+      </button>
+    </div>
+  ),
+}))
 jest.mock('@/components/schedules/EnrollmentInput', () => ({
   __esModule: true,
   default: ({
@@ -1404,6 +1425,189 @@ describe('ScheduleSidePanel interactions', () => {
     })
   })
 
+  it('opens Assign Sub panel from weekly quick action instead of navigating to Sub Finder', async () => {
+    setupFetch({
+      start_date: '2026-02-09',
+      end_date: '2026-02-09',
+      weekdays: ['Monday'],
+      matching_shift_count: 1,
+    })
+
+    const props = buildProps()
+    const onClose = jest.fn()
+    renderWithQueryClient(<ScheduleSidePanel {...props} readOnly onClose={onClose} />)
+
+    const assignSubButtons = await screen.findAllByRole('button', { name: 'Assign Sub' })
+    expect(assignSubButtons.length).toBeGreaterThan(0)
+
+    fireEvent.click(assignSubButtons[0])
+
+    expect(requestOpenAssignSubMock).toHaveBeenCalledWith({
+      teacherId: 'teacher-1',
+      startDate: '2026-02-09',
+      endDate: '2026-02-09',
+    })
+    expect(onClose).toHaveBeenCalled()
+    expect(pushMock).not.toHaveBeenCalledWith(expect.stringContaining('/sub-finder'))
+  })
+
+  it('shows weekly inactive-slot guidance as amber linked Baseline Schedule callout', async () => {
+    setupFetch({
+      start_date: '2026-02-09',
+      end_date: '2026-02-09',
+      weekdays: ['Monday'],
+      matching_shift_count: 1,
+    })
+
+    const props = buildProps()
+    renderWithQueryClient(
+      <ScheduleSidePanel
+        {...props}
+        readOnly
+        selectedCellData={{
+          ...props.selectedCellData,
+          schedule_cell: {
+            ...props.selectedCellData.schedule_cell,
+            is_active: false,
+          },
+        }}
+      />
+    )
+
+    const guidanceLink = await screen.findByRole('link', {
+      name: 'Go to Baseline Schedule to turn slot status to Active',
+    })
+    expect(guidanceLink).toBeInTheDocument()
+    expect(guidanceLink).toHaveAttribute(
+      'href',
+      expect.stringContaining(
+        '/settings/baseline-schedule?classroom_id=class-1&day_of_week_id=day-1&time_slot_id=slot-1&day_name=Monday&time_slot_code=EM&classroom_name=Infant%20Room&return_to_weekly=true&open_panel=true'
+      )
+    )
+    expect(guidanceLink.closest('div')).toHaveClass('bg-amber-50')
+  })
+
+  it('keeps baseline edit-mode inactive-slot copy in non-weekly context', async () => {
+    setupFetch({
+      start_date: '2026-02-09',
+      end_date: '2026-02-09',
+      weekdays: ['Monday'],
+      matching_shift_count: 1,
+    })
+
+    const props = buildProps()
+    renderWithQueryClient(
+      <ScheduleSidePanel
+        {...props}
+        readOnly={false}
+        selectedCellData={{
+          ...props.selectedCellData,
+          schedule_cell: {
+            ...props.selectedCellData.schedule_cell,
+            is_active: false,
+          },
+        }}
+      />
+    )
+
+    expect(
+      await screen.findByText(
+        'Turn Slot status to Active below to assign teachers and make changes.'
+      )
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('link', {
+        name: 'Go to Baseline Schedule to turn slot status to Active',
+      })
+    ).not.toBeInTheDocument()
+  })
+
+  it('does not auto-activate an inactive baseline cell on open when assignments hydrate asynchronously', async () => {
+    setupFetch({
+      start_date: '2026-02-09',
+      end_date: '2026-02-09',
+      weekdays: ['Monday'],
+      matching_shift_count: 1,
+    })
+
+    const props = buildProps()
+    renderWithQueryClient(
+      <ScheduleSidePanel
+        {...props}
+        readOnly={false}
+        selectedCellData={{
+          ...props.selectedCellData,
+          schedule_cell: {
+            ...props.selectedCellData.schedule_cell,
+            is_active: false,
+            class_groups: [],
+            enrollment_for_staffing: null,
+          },
+        }}
+      />
+    )
+
+    expect(
+      await screen.findByText(
+        'To assign teachers and make changes, turn Slot status to Active above.'
+      )
+    ).toBeInTheDocument()
+
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 30))
+    })
+
+    expect(
+      screen.getByText('To assign teachers and make changes, turn Slot status to Active above.')
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText('This slot requires staffing and will be validated')
+    ).not.toBeInTheDocument()
+  })
+
+  it('auto-activates inactive empty baseline cell after explicit user class-group edit', async () => {
+    setupFetch({
+      start_date: '2026-02-09',
+      end_date: '2026-02-09',
+      weekdays: ['Monday'],
+      matching_shift_count: 1,
+    })
+
+    const props = buildProps()
+    renderWithQueryClient(
+      <ScheduleSidePanel
+        {...props}
+        readOnly={false}
+        selectedCellData={{
+          ...props.selectedCellData,
+          assignments: [],
+          schedule_cell: {
+            ...props.selectedCellData.schedule_cell,
+            is_active: false,
+            class_groups: [],
+            enrollment_for_staffing: null,
+          },
+        }}
+      />
+    )
+
+    expect(
+      await screen.findByText(
+        'To assign teachers and make changes, turn Slot status to Active above.'
+      )
+    ).toBeInTheDocument()
+
+    const addClassGroupButton = screen.getByRole('button', { name: 'Add class group' })
+    fireEvent.mouseDown(addClassGroupButton)
+    fireEvent.click(addClassGroupButton)
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('This slot requires staffing and will be validated')
+      ).toBeInTheDocument()
+    })
+  })
+
   it('disables Save and Apply when classroom is inactive (parent inactive)', async () => {
     setupFetch({
       start_date: '2026-02-09',
@@ -1426,6 +1630,74 @@ describe('ScheduleSidePanel interactions', () => {
 
     expect(await screen.findByRole('button', { name: 'Save' })).toBeDisabled()
     expect(screen.getByTestId('multi-day-apply')).toHaveAttribute('data-disabled', 'true')
+  })
+
+  it('does not show unsaved changes when closing an inactive baseline cell without edits', async () => {
+    setupFetch({
+      start_date: '2026-02-09',
+      end_date: '2026-02-09',
+      weekdays: ['Monday'],
+      matching_shift_count: 1,
+    })
+
+    const props = buildProps()
+    const onClose = jest.fn()
+    renderWithQueryClient(
+      <ScheduleSidePanel
+        {...props}
+        onClose={onClose}
+        readOnly={false}
+        selectedCellData={{
+          ...props.selectedCellData,
+          schedule_cell: {
+            ...props.selectedCellData.schedule_cell,
+            is_active: false,
+          },
+        }}
+      />
+    )
+
+    await screen.findByText(
+      'To assign teachers and make changes, turn Slot status to Active above.'
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close panel' }))
+
+    await waitFor(() => {
+      expect(onClose).toHaveBeenCalled()
+    })
+    expect(screen.queryByTestId('unsaved-dialog')).not.toBeInTheDocument()
+  })
+
+  it('does not show unsaved changes when closing a parent-inactive cell without edits', async () => {
+    setupFetch({
+      start_date: '2026-02-09',
+      end_date: '2026-02-09',
+      weekdays: ['Monday'],
+      matching_shift_count: 1,
+    })
+
+    const props = buildProps()
+    const onClose = jest.fn()
+    renderWithQueryClient(
+      <ScheduleSidePanel
+        {...props}
+        onClose={onClose}
+        readOnly={false}
+        selectedCellData={{
+          ...props.selectedCellData,
+          classroom_is_active: false,
+        }}
+      />
+    )
+
+    await screen.findByText(/This cell is locked because parent settings are inactive/)
+    fireEvent.click(screen.getByRole('button', { name: 'Close panel' }))
+
+    await waitFor(() => {
+      expect(onClose).toHaveBeenCalled()
+    })
+    expect(screen.queryByTestId('unsaved-dialog')).not.toBeInTheDocument()
   })
 
   it('disables Save and Apply when time slot is inactive (parent inactive)', async () => {

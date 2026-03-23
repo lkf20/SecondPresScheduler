@@ -161,6 +161,21 @@ Use the shared `Button` component (`components/ui/button.tsx`) and these variant
 - Work via pull requests. Follow the repo’s branch and commit rules (see `.cursor/rules` if present).
 - Before creating or merging a PR, complete the [Pre-PR integrity checklist](docs/guides/PRE_PR_CHECKLIST.md). Use the PR template (Risks, Checks run, Evidence, Tests for non-trivial changes) for every PR.
 
+## Admin staff role
+
+- **Purpose:** `ADMIN` in `staff_role_types` labels office/admin staff who are not Baseline Permanent or Baseline Flex teachers. They are **not** counted in weekly/baseline teaching grids as Permanent/Flex; use this role instead of mislabeling them as Permanent.
+- **Exclusivity:** A staff member may be **at most one** of Permanent, Flexible, or Admin (via DB trigger on `staff_role_type_assignments`). They may still be marked **Substitute** (`is_sub`) in addition.
+- **UI:** Staff form primary role includes Admin; staff list uses `adminRoleColorValues` in `lib/utils/colors.ts` (violet). Weekly schedule legend includes an **Admin** chip for consistency with staff display.
+- **Seeding:** Migration `120_add_admin_role.sql` inserts the `ADMIN` role type when missing.
+
+## Multi-classroom absence coverage (floaters)
+
+- **Behavior:** When a teacher is scheduled in **more than one classroom** for the same day/slot (floater), one `time_off_shift` can produce **multiple** `coverage_request_shifts` (one per classroom). Directors can assign a sub to one room, both as a floater (0.5 each), or leave rooms uncovered independently.
+- **Linkage:** `coverage_request_shifts.time_off_shift_id` references the `time_off_shifts` row that drove creation (nullable for legacy rows).
+- **Assign Sub panel:** Multi-room slots show a per-slot choice: assign to both rooms (floater) or a single room; after a partial-room assign, the panel can show which rooms still need coverage with a link to Sub Finder.
+- **API:** `POST /api/assign-sub/shifts` keeps a `date|slot_code` map fallback for legacy rows with missing `classroom_id` on `coverage_request_shifts` and logs a **warning** when that fallback is used (remove the fallback only after data is clean). `GET /api/sub-finder/coverage-request/[absence_id]` creates per-classroom rows and sets `time_off_shift_id` when inserting from time off shifts.
+- **Display:** Sub Finder absence summaries use **person-level** `time_off_shifts` counts; shift lines can show a multi-room label (e.g. “Mon AM (2 rooms: A, B) • …”) via `shift_label` / transform options. See [docs/guides/MULTI_CLASSROOM_COVERAGE_DEPENDENCY_AUDIT.md](docs/guides/MULTI_CLASSROOM_COVERAGE_DEPENDENCY_AUDIT.md) for file-level audit notes.
+
 ## School Calendar
 
 - **First and last day of school:** Stored in `schedule_settings.first_day_of_school` and `last_day_of_school`. Managed on the School Calendar settings page (`/settings/calendar`).
@@ -208,6 +223,12 @@ Floater weight is 0.5 for now; it may become more sophisticated later—keep log
 - **Where closures appear:** Weekly Schedule grid (closed cells show “School Closed”); Printable Today’s Schedule (on-screen and PDF); Manage Calendar link on the weekly schedule page.
 - **Helpers:** `lib/utils/school-closures.ts` — `isCellClosed(weekStartISO, dayNumber, timeSlotId, closures)` for weekly grid; `isSlotClosedOnDate(dateISO, timeSlotId, closures)` for daily schedule/PDF. `lib/utils/date.ts` — `getCellDateISO(weekStartISO, dayNumber)` for mapping week + day to date.
 - **Legends:** When closures exist in the displayed week, the Weekly Schedule legend includes “School Closed.” Keep it in sync if closure styling changes.
+
+## Sub Finder: shift rows (CRS) and floater grouping
+
+- **Shift row:** When `coverage_request_shifts` (or equivalent) is present, treat **`date` + `time_slot_code` + classroom** as one shift for counts, chips, filters, and `getShiftKey` — not “one shift per time slot” when a teacher floats two rooms at the same time.
+- **UI:** Use **“X of Y shifts need coverage”**; optional tooltip: _Counts each classroom separately when a teacher floats two rooms at the same time_ (`SHIFT_COUNT_SEMANTICS_TOOLTIP`). Group same-slot multi-room chips in the **Weekly Schedule floater** purple treatment (see `SHIFT_CHIPS_CONTRACT.md` and `lib/sub-finder/floater-shift-groups.ts`).
+- **Weekly grid staffing** still uses **Floater = 0.5** per person in ratio math; that is separate from **Sub Finder shift row** counting (room-level CRS rows).
 
 ## Sub Finder: contact status and per-shift display
 

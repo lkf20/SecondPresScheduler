@@ -3,9 +3,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import BaselineSchedulePage from '../page'
 
+const searchParamValues = new Map<string, string>()
+
 jest.mock('next/navigation', () => ({
   useSearchParams: () => ({
-    get: () => null,
+    get: (key: string) => searchParamValues.get(key) ?? null,
   }),
 }))
 
@@ -30,8 +32,18 @@ jest.mock('@/lib/schedules/schedule-filter-data', () => ({
 }))
 
 jest.mock('@/components/schedules/WeeklyScheduleGridNew', () => {
-  return function WeeklyScheduleGridNewMock(props: { selectedDayIds: string[] }) {
-    return <div data-testid="grid-selected-day-ids">{(props.selectedDayIds || []).join(',')}</div>
+  return function WeeklyScheduleGridNewMock(props: {
+    selectedDayIds: string[]
+    initialSelectedCell?: { classroomId: string; dayId: string; timeSlotId: string } | null
+  }) {
+    return (
+      <div>
+        <div data-testid="grid-selected-day-ids">{(props.selectedDayIds || []).join(',')}</div>
+        <div data-testid="grid-initial-selected-cell">
+          {props.initialSelectedCell ? JSON.stringify(props.initialSelectedCell) : 'none'}
+        </div>
+      </div>
+    )
   }
 })
 
@@ -66,6 +78,7 @@ const { useFilterOptions } = jest.requireMock('@/lib/hooks/use-filter-options') 
 describe('BaselineSchedulePage day filtering', () => {
   beforeEach(() => {
     localStorage.clear()
+    searchParamValues.clear()
 
     useScheduleSettings.mockReturnValue({
       data: {
@@ -173,5 +186,28 @@ describe('BaselineSchedulePage day filtering', () => {
     })
     expect(screen.getByTestId('grid-selected-day-ids')).not.toHaveTextContent('day-sat')
     expect(screen.getByTestId('grid-selected-day-ids')).not.toHaveTextContent('day-sun')
+  })
+
+  it('passes initialSelectedCell when open_panel=true deep link params are present', async () => {
+    searchParamValues.set('open_panel', 'true')
+    searchParamValues.set('classroom_id', 'class-1')
+    searchParamValues.set('day_of_week_id', 'day-mon')
+    searchParamValues.set('time_slot_id', 'slot-1')
+
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <BaselineSchedulePage />
+      </QueryClientProvider>
+    )
+
+    await waitFor(() => {
+      expect(screen.getByTestId('grid-initial-selected-cell')).toHaveTextContent(
+        '{"classroomId":"class-1","dayId":"day-mon","timeSlotId":"slot-1"}'
+      )
+    })
   })
 })

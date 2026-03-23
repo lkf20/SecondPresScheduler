@@ -58,4 +58,38 @@ describe('useSubFinderShifts', () => {
       expect.objectContaining({ assignment_id: 'assign-2', sub_name: 'Laura O.' }),
     ])
   })
+
+  it('preserves classroom_id on shift details (required for ShiftChips row keys)', () => {
+    const absence: Absence = {
+      id: 'absence-2',
+      teacher_id: 'teacher-1',
+      teacher_name: 'Anne M.',
+      start_date: '2099-03-26',
+      end_date: '2099-03-26',
+      reason: 'Vacation',
+      shifts: {
+        total: 1,
+        uncovered: 1,
+        partially_covered: 0,
+        fully_covered: 0,
+        shift_details: [
+          {
+            id: 'shift-crs-1',
+            date: '2099-03-26',
+            day_name: 'Thu',
+            time_slot_code: 'LB1',
+            classroom_id: 'room-uuid-1',
+            class_name: null,
+            classroom_name: 'Infant Room',
+            classroom_color: null,
+            status: 'uncovered',
+          },
+        ],
+      },
+    }
+
+    const { result } = renderHook(() => useSubFinderShifts(absence, true))
+
+    expect(result.current.shiftDetails[0].classroom_id).toBe('room-uuid-1')
+  })
 })

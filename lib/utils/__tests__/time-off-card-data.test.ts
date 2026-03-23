@@ -21,13 +21,17 @@ function makeShift(
   id: string,
   date: string,
   timeSlotId: string,
-  dayOfWeekId?: string
+  dayOfWeekId?: string,
+  classroomId?: string | null,
+  coverageRequestShiftId?: string | null
 ): Parameters<typeof transformTimeOffCardData>[1][number] {
   return {
     id,
+    coverage_request_shift_id: coverageRequestShiftId ?? null,
     date,
     day_of_week_id: dayOfWeekId ?? 'dow-1',
     time_slot_id: timeSlotId,
+    classroom_id: classroomId ?? null,
     day_of_week: { name: 'Monday' },
     time_slot: { code: 'AM', name: 'Morning' },
   }
@@ -36,7 +40,13 @@ function makeShift(
 function makeAssignment(
   date: string,
   timeSlotId: string,
-  options?: { is_partial?: boolean; assignment_type?: string; subName?: string }
+  options?: {
+    is_partial?: boolean
+    assignment_type?: string
+    subName?: string
+    coverage_request_shift_id?: string | null
+    classroom_id?: string | null
+  }
 ): Parameters<typeof transformTimeOffCardData>[2][number] {
   const sub = options?.subName
     ? {
@@ -46,8 +56,11 @@ function makeAssignment(
       }
     : undefined
   return {
+    id: options?.coverage_request_shift_id || undefined,
+    coverage_request_shift_id: options?.coverage_request_shift_id ?? null,
     date,
     time_slot_id: timeSlotId,
+    classroom_id: options?.classroom_id ?? null,
     is_partial: options?.is_partial ?? false,
     assignment_type: options?.assignment_type ?? null,
     sub: sub ?? null,
@@ -129,6 +142,39 @@ describe('transformTimeOffCardData', () => {
       expect(result.uncovered).toBe(1)
       expect(result.total).toBe(3)
       expect(result.status).toBe('partially_covered')
+    })
+
+    it('multi-room slot with one room assigned remains partially covered by room', () => {
+      const classrooms = [
+        { id: 'class-a', name: 'Infant Room', color: '#dbeafe' },
+        { id: 'class-b', name: 'Toddler A Room', color: '#fce7f3' },
+      ]
+      const shifts = [
+        makeShift('crs-a', '2026-02-10', 'slot-1', 'dow-1', 'class-a', 'crs-a'),
+        makeShift('crs-b', '2026-02-10', 'slot-1', 'dow-1', 'class-b', 'crs-b'),
+      ]
+      const assignments = [
+        makeAssignment('2026-02-10', 'slot-1', {
+          coverage_request_shift_id: 'crs-a',
+          classroom_id: 'class-a',
+          subName: 'Victoria I.',
+        }),
+      ]
+
+      const result = transformTimeOffCardData(minimalRequest, shifts, assignments, classrooms, {
+        includeDetailedShifts: true,
+      })
+
+      expect(result.covered).toBe(1)
+      expect(result.partial).toBe(0)
+      expect(result.uncovered).toBe(1)
+      expect(result.status).toBe('partially_covered')
+      expect(result.shift_details?.map(s => [s.classroom_id, s.status])).toEqual(
+        expect.arrayContaining([
+          ['class-a', 'covered'],
+          ['class-b', 'uncovered'],
+        ])
+      )
     })
 
     it('partial-only assignment counts as partial, status needs_coverage (no full coverage)', () => {
@@ -276,6 +322,21 @@ describe('transformTimeOffCardData', () => {
         { displayNameFormat: 'first_last_initial' }
       )
       expect(result.teacher_name).toBe('Jane D.')
+    })
+  })
+
+  describe('multi-room labels (getClassroomsForShift)', () => {
+    it('appends (N rooms: …) to shift detail label when multiple classrooms', () => {
+      const shifts = [makeShift('s1', '2026-02-10', 'slot-1')]
+      const result = transformTimeOffCardData(minimalRequest, shifts, noAssignments, noClassrooms, {
+        includeDetailedShifts: true,
+        getClassroomsForShift: () => [
+          { id: 'c1', name: 'Infant', color: null },
+          { id: 'c2', name: 'Toddler A', color: null },
+        ],
+      })
+      const detail = result.shift_details?.[0]
+      expect(detail?.label).toContain('(2 rooms: Infant, Toddler A)')
     })
   })
 })

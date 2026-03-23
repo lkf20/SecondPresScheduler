@@ -40,6 +40,7 @@ export type TimeOffCardData = {
     date?: string
     day_name?: string
     time_slot_code?: string
+    classroom_id?: string | null
     class_name?: string | null
     classroom_name?: string | null
     classroom_color?: string | null
@@ -74,6 +75,10 @@ export interface ShiftInput {
   date: string
   day_of_week_id: string | null
   time_slot_id: string
+  /** Optional room identity when this represents a coverage_request_shift row. */
+  classroom_id?: string | null
+  /** Optional direct identity for coverage-request-shift-level rows. */
+  coverage_request_shift_id?: string | null
   day_of_week?: { name: string | null; display_order?: number | null } | null
   time_slot?: { code: string | null; display_order?: number | null } | null
 }
@@ -82,6 +87,10 @@ export interface AssignmentInput {
   id?: string
   date: string
   time_slot_id: string
+  /** Optional room identity when available from coverage_request_shift linkage. */
+  classroom_id?: string | null
+  /** Optional direct identity for coverage-request-shift-level linkage. */
+  coverage_request_shift_id?: string | null
   is_partial?: boolean | null
   assignment_type?: string | null
   sub?: {
@@ -117,6 +126,15 @@ export interface TransformOptions {
     timeSlotId: string
   ) => ClassroomInput | null
   /**
+   * All classrooms when the teacher is scheduled in multiple rooms for the same slot (floater).
+   * When provided, shift labels include a "(N rooms: …)" suffix for multi-room slots.
+   */
+  getClassroomsForShift?: (
+    teacherId: string,
+    dayOfWeekId: string | null,
+    timeSlotId: string
+  ) => ClassroomInput[]
+  /**
    * Get class name for a shift (for detailed shifts)
    */
   getClassNameForShift?: (
@@ -148,12 +166,33 @@ export function transformTimeOffCardData(
       return name.slice(0, 3)
     },
     getClassroomForShift,
+    getClassroomsForShift,
     getClassNameForShift,
     displayNameFormat,
   } = options
 
-  // Build assignment map: key = `${date}|${time_slot_id}` -> { hasFull, hasPartial, sub }
+  // Build assignment map using room-aware shift identity when available:
+  // - coverage_request_shift_id (preferred)
+  // - date|time_slot_id|classroom_id
+  // - date|time_slot_id (legacy fallback)
   // Use toDateStringISO so keys match regardless of DB date format (YYYY-MM-DD vs timestamp)
+  const buildIdentityKey = ({
+    coverage_request_shift_id,
+    date,
+    time_slot_id,
+    classroom_id,
+  }: {
+    coverage_request_shift_id?: string | null
+    date: string
+    time_slot_id: string
+    classroom_id?: string | null
+  }) =>
+    coverage_request_shift_id
+      ? `crs:${coverage_request_shift_id}`
+      : classroom_id
+        ? `${toDateStringISO(date)}|${time_slot_id}|${classroom_id}`
+        : `${toDateStringISO(date)}|${time_slot_id}`
+
   const assignmentMap = new Map<
     string,
     {
@@ -168,7 +207,12 @@ export function transformTimeOffCardData(
   >()
 
   assignments.forEach(assignment => {
-    const key = `${toDateStringISO(assignment.date)}|${assignment.time_slot_id}`
+    const key = buildIdentityKey({
+      coverage_request_shift_id: assignment.coverage_request_shift_id,
+      date: assignment.date,
+      time_slot_id: assignment.time_slot_id,
+      classroom_id: assignment.classroom_id,
+    })
     const existing = assignmentMap.get(key) || {
       hasFull: false,
       hasPartial: false,
@@ -219,7 +263,12 @@ export function transformTimeOffCardData(
   const shiftDetails: TimeOffCardData['shift_details'] = []
 
   shifts.forEach(shift => {
-    const key = `${toDateStringISO(shift.date)}|${shift.time_slot_id}`
+    const key = buildIdentityKey({
+      coverage_request_shift_id: shift.coverage_request_shift_id ?? null,
+      date: shift.date,
+      time_slot_id: shift.time_slot_id,
+      classroom_id: shift.classroom_id,
+    })
     const assignment = assignmentMap.get(key)
 
     let status: 'covered' | 'partial' | 'uncovered' = 'uncovered'
@@ -249,21 +298,36 @@ export function transformTimeOffCardData(
 
     if (includeDetailedShifts) {
       // Include detailed information
-      const classroom = getClassroomForShift
-        ? getClassroomForShift(request.teacher_id, shift.day_of_week_id, shift.time_slot_id)
-        : null
+      const classroomsList =
+        getClassroomsForShift?.(request.teacher_id, shift.day_of_week_id, shift.time_slot_id) ??
+        (() => {
+          const one = getClassroomForShift
+            ? getClassroomForShift(request.teacher_id, shift.day_of_week_id, shift.time_slot_id)
+            : null
+          return one ? [one] : []
+        })()
+      const classroom =
+        (shift.classroom_id ? classroomsList.find(c => c.id === shift.classroom_id) : null) ??
+        classroomsList[0] ??
+        null
+      const multiRoomSuffix =
+        !shift.classroom_id && classroomsList.length > 1
+          ? ` (${classroomsList.length} rooms: ${classroomsList.map(c => c.name).join(', ')})`
+          : ''
+      const labelWithRooms = `${dayName} ${timeCode}${multiRoomSuffix} • ${month} ${day}`
       const className = getClassNameForShift
         ? getClassNameForShift(request.teacher_id, shift.day_of_week_id, shift.time_slot_id)
         : null
 
       shiftDetails.push({
         id: shift.id,
-        label,
+        label: labelWithRooms,
         status,
         date: shift.date,
         day_name: shift.day_of_week?.name || undefined,
         time_slot_code: shift.time_slot?.code || undefined,
         class_name: className || undefined,
+        classroom_id: shift.classroom_id || undefined,
         classroom_name: classroom?.name || undefined,
         classroom_color: classroom?.color || undefined,
         sub_name: assignment?.subName || undefined,

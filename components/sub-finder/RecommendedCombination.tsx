@@ -7,6 +7,7 @@ import { Users, CheckCircle2, AlertTriangle, ChevronLeft, ChevronRight } from 'l
 import type { RecommendedCombination as RecommendedCombinationType } from '@/lib/utils/sub-combination'
 import type { SubCandidate, Absence } from '@/components/sub-finder/hooks/useSubFinderData'
 import SubFinderCard from '@/components/sub-finder/SubFinderCard'
+import { getShiftKey } from '@/lib/sub-finder/shift-helpers'
 
 interface RecommendedCombinationProps {
   combinations: RecommendedCombinationType[]
@@ -45,11 +46,6 @@ export default function RecommendedCombination({
     setCurrentIndex(0)
   }, [totalCombinations])
 
-  if (!currentCombination || currentCombination.subs.length === 0) {
-    return null
-  }
-  const isSingleSub = currentCombination.subs.length === 1
-
   const isShiftVisible = (date?: string) => {
     if (!date) return false
     if (includePastShifts) return true
@@ -65,6 +61,66 @@ export default function RecommendedCombination({
     ? visibleAllShifts.filter(shift => shift.status === 'uncovered')
     : visibleAllShifts
   const visibleTotalShifts = visibleRemainingShifts.length || totalShifts
+  const toCoverageKey = (shift: {
+    date: string
+    time_slot_code: string
+    classroom_id?: string | null
+    classroom_name?: string | null
+  }) =>
+    getShiftKey({
+      date: shift.date,
+      time_slot_code: shift.time_slot_code,
+      classroom_id: shift.classroom_id ?? null,
+      classroom_name: shift.classroom_name ?? null,
+    })
+
+  const headerTotalShifts =
+    visibleAllShifts.length || totalShifts || (currentCombination?.totalShiftsNeeded ?? 0)
+
+  const headerCoveredShifts = useMemo(() => {
+    if (!currentCombination || currentCombination.subs.length === 0) {
+      return 0
+    }
+    if (allSubs.length === 0) {
+      return Math.min(currentCombination.totalShiftsCovered, headerTotalShifts)
+    }
+
+    const targetShifts = useRemainingLabel ? visibleRemainingShifts : visibleAllShifts
+    const targetKeys = new Set(targetShifts.map(shift => toCoverageKey(shift as any)))
+    if (targetKeys.size === 0) {
+      return Math.min(currentCombination.totalShiftsCovered, headerTotalShifts)
+    }
+
+    const coveredKeys = new Set<string>()
+    currentCombination.subs.forEach(assignment => {
+      const subData = allSubs.find(sub => sub.id === assignment.subId)
+      ;(subData?.can_cover || []).forEach(shift => {
+        const key = toCoverageKey({
+          date: shift.date,
+          time_slot_code: shift.time_slot_code,
+          classroom_id: (shift as { classroom_id?: string | null }).classroom_id ?? null,
+          classroom_name: shift.classroom_name ?? null,
+        })
+        if (targetKeys.has(key)) {
+          coveredKeys.add(key)
+        }
+      })
+    })
+
+    return coveredKeys.size
+  }, [
+    allSubs,
+    currentCombination,
+    headerTotalShifts,
+    useRemainingLabel,
+    visibleAllShifts,
+    visibleRemainingShifts,
+  ])
+
+  if (!currentCombination || currentCombination.subs.length === 0) {
+    return null
+  }
+  const isSingleSub = currentCombination.subs.length === 1
 
   return (
     <Card
@@ -82,8 +138,7 @@ export default function RecommendedCombination({
             <div className="flex items-center gap-1.5 text-base">
               <CheckCircle2 className="h-4 w-4 text-emerald-600" />
               <span className="text-muted-foreground">
-                {currentCombination.totalShiftsCovered} of {currentCombination.totalShiftsNeeded}{' '}
-                shifts covered
+                {headerCoveredShifts} of {headerTotalShifts} shifts covered
                 {!isSingleSub &&
                   ` by ${currentCombination.subs.length} sub${currentCombination.subs.length !== 1 ? 's' : ''}`}
               </span>
@@ -130,19 +185,52 @@ export default function RecommendedCombination({
           )
           const visibleAssignedAll = assignedAll.filter(shift => isShiftVisible(shift.date))
           const canCoverMap = new Set(
-            visibleCanCoverAll.map(shift => `${shift.date}|${shift.time_slot_code}`)
+            visibleCanCoverAll.map(shift =>
+              getShiftKey({
+                date: shift.date,
+                time_slot_code: shift.time_slot_code,
+                classroom_id: (shift as { classroom_id?: string | null }).classroom_id ?? null,
+                classroom_name: shift.classroom_name ?? null,
+              })
+            )
           )
           const assignedMap = new Set(
-            visibleAssignedAll.map(shift => `${shift.date}|${shift.time_slot_code}`)
+            visibleAssignedAll.map(shift =>
+              getShiftKey({
+                date: shift.date,
+                time_slot_code: shift.time_slot_code,
+                classroom_id: (shift as { classroom_id?: string | null }).classroom_id ?? null,
+                classroom_name: shift.classroom_name ?? null,
+              })
+            )
           )
           const remainingShiftKeys = new Set(
-            visibleRemainingShifts.map(shift => `${shift.date}|${shift.time_slot_code}`)
+            visibleRemainingShifts.map(shift =>
+              getShiftKey({
+                date: shift.date,
+                time_slot_code: shift.time_slot_code,
+                classroom_id: shift.classroom_id ?? null,
+                classroom_name: shift.classroom_name ?? null,
+              })
+            )
           )
           const shiftsCovered = visibleCanCoverAll.filter(shift =>
-            remainingShiftKeys.has(`${shift.date}|${shift.time_slot_code}`)
+            remainingShiftKeys.has(
+              getShiftKey({
+                date: shift.date,
+                time_slot_code: shift.time_slot_code,
+                classroom_id: (shift as { classroom_id?: string | null }).classroom_id ?? null,
+                classroom_name: shift.classroom_name ?? null,
+              })
+            )
           ).length
           const coverageSegments = visibleRemainingShifts.map(shift => {
-            const key = `${shift.date}|${shift.time_slot_code}`
+            const key = getShiftKey({
+              date: shift.date,
+              time_slot_code: shift.time_slot_code,
+              classroom_id: shift.classroom_id ?? null,
+              classroom_name: shift.classroom_name ?? null,
+            })
             if (assignedMap.has(key)) {
               return 'assigned' as const
             }
@@ -151,7 +239,6 @@ export default function RecommendedCombination({
             }
             return 'unavailable' as const
           })
-
           return (
             <SubFinderCard
               key={assignment.subId}

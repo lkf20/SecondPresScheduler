@@ -319,9 +319,11 @@ export function buildSubAvailabilityPdfHtml({
                       const hasDayDivider = previous && previous.dayId !== current.dayId
                       return `<td class="availability-cell ${hasDayDivider ? 'day-sep' : ''} ${
                         matrixIndex === 0 ? 'edge-divider-left' : ''
-                      }" title="${
-                        cell.available ? 'Available' : 'Unavailable'
-                      }">${cell.available ? '<span class="availability-mark">✓</span>' : ''}</td>`
+                      }" title="${cell.available ? 'Available' : 'Unavailable'}">${
+                        cell.available
+                          ? '<span class="availability-mark" aria-hidden="true"><svg class="availability-mark-icon" viewBox="0 0 16 16" fill="none"><path d="M3.5 8.5L6.5 11.5L12.5 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>'
+                          : ''
+                      }</td>`
                     })
                     .join('')
 
@@ -467,8 +469,16 @@ export function buildSubAvailabilityPdfHtml({
         padding: 3px 2px;
       }
       .availability-mark {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
         color: ${colorFriendly ? '#0f766e' : '#334155'};
         font-weight: 700;
+      }
+      .availability-mark-icon {
+        width: ${isDense ? '11px' : '12px'};
+        height: ${isDense ? '11px' : '12px'};
+        display: block;
       }
       .empty-cell { color: #94a3b8; }
       .text-cell {

@@ -52,6 +52,10 @@ export default function BaselineSchedulePage() {
   const focusClassroomId = searchParams.get('classroom_id')
   const focusDayId = searchParams.get('day_of_week_id')
   const focusTimeSlotId = searchParams.get('time_slot_id')
+  const focusDayName = searchParams.get('day_name')
+  const focusTimeSlotCode = searchParams.get('time_slot_code')
+  const focusClassroomName = searchParams.get('classroom_name')
+  const openFocusedCellPanel = searchParams.get('open_panel') === 'true'
   const hasAppliedFocusRef = useRef(false)
 
   // Always use current week for baseline schedule (no week picker)
@@ -95,6 +99,32 @@ export default function BaselineSchedulePage() {
     () => availableClassrooms.map(c => c.id),
     [availableClassrooms]
   )
+
+  const resolvedFocusClassroomId = useMemo(() => {
+    if (focusClassroomId && availableClassroomIds.includes(focusClassroomId))
+      return focusClassroomId
+    if (!focusClassroomName) return null
+    const match = availableClassrooms.find(
+      c => c.name?.toLowerCase() === focusClassroomName.toLowerCase()
+    )
+    return match?.id ?? null
+  }, [availableClassroomIds, availableClassrooms, focusClassroomId, focusClassroomName])
+
+  const resolvedFocusDayId = useMemo(() => {
+    if (focusDayId && availableDays.some(day => day.id === focusDayId)) return focusDayId
+    if (!focusDayName) return null
+    const match = availableDays.find(day => day.name?.toLowerCase() === focusDayName.toLowerCase())
+    return match?.id ?? null
+  }, [availableDays, focusDayId, focusDayName])
+
+  const resolvedFocusTimeSlotId = useMemo(() => {
+    if (focusTimeSlotId && availableTimeSlotIds.includes(focusTimeSlotId)) return focusTimeSlotId
+    if (!focusTimeSlotCode) return null
+    const match = availableTimeSlots.find(
+      slot => slot.code?.toLowerCase() === focusTimeSlotCode.toLowerCase()
+    )
+    return match?.id ?? null
+  }, [availableTimeSlotIds, availableTimeSlots, focusTimeSlotCode, focusTimeSlotId])
 
   const loading = isLoadingSchedule || isLoadingSettings || isLoadingFilters
   const error = scheduleError
@@ -205,7 +235,7 @@ export default function BaselineSchedulePage() {
   ])
 
   useEffect(() => {
-    if (!focusClassroomId || !focusDayId || !focusTimeSlotId) return
+    if (!resolvedFocusClassroomId || !resolvedFocusDayId || !resolvedFocusTimeSlotId) return
     if (hasAppliedFocusRef.current) return
     if (
       availableDays.length === 0 ||
@@ -216,19 +246,27 @@ export default function BaselineSchedulePage() {
     }
 
     setFilters(prev => ({
-      selectedDayIds: [focusDayId],
-      selectedTimeSlotIds: [focusTimeSlotId],
-      selectedClassroomIds: [focusClassroomId],
+      selectedDayIds: [resolvedFocusDayId],
+      selectedTimeSlotIds: [resolvedFocusTimeSlotId],
+      selectedClassroomIds: [resolvedFocusClassroomId],
       slotFilterMode: prev?.slotFilterMode ?? 'all',
-      showInactiveClassrooms: prev?.showInactiveClassrooms ?? false,
-      showInactiveTimeSlots: prev?.showInactiveTimeSlots ?? false,
-      displayFilters: prev?.displayFilters ?? {
-        belowRequired: true,
-        belowPreferred: true,
-        fullyStaffed: true,
-        inactive: true,
-        viewNotes: true,
-      },
+      showInactiveClassrooms: openFocusedCellPanel ? true : (prev?.showInactiveClassrooms ?? false),
+      showInactiveTimeSlots: openFocusedCellPanel ? true : (prev?.showInactiveTimeSlots ?? false),
+      displayFilters: openFocusedCellPanel
+        ? {
+            belowRequired: prev?.displayFilters?.belowRequired ?? true,
+            belowPreferred: prev?.displayFilters?.belowPreferred ?? true,
+            fullyStaffed: prev?.displayFilters?.fullyStaffed ?? true,
+            inactive: true,
+            viewNotes: prev?.displayFilters?.viewNotes ?? true,
+          }
+        : (prev?.displayFilters ?? {
+            belowRequired: true,
+            belowPreferred: true,
+            fullyStaffed: true,
+            inactive: true,
+            viewNotes: true,
+          }),
       displayMode: 'permanent-only', // Baseline schedule only shows permanent teachers
       layout: prev?.layout ?? 'days-x-classrooms',
     }))
@@ -237,10 +275,17 @@ export default function BaselineSchedulePage() {
     focusClassroomId,
     focusDayId,
     focusTimeSlotId,
+    resolvedFocusClassroomId,
+    resolvedFocusDayId,
+    resolvedFocusTimeSlotId,
     availableDays.length,
     availableTimeSlots.length,
     availableClassrooms.length,
   ])
+
+  useEffect(() => {
+    hasAppliedFocusRef.current = false
+  }, [resolvedFocusClassroomId, resolvedFocusDayId, resolvedFocusTimeSlotId])
 
   // Normalize selected classroom IDs against current available classrooms.
   // This repairs stale localStorage selections (e.g., deleted classroom IDs lingering)
@@ -482,11 +527,14 @@ export default function BaselineSchedulePage() {
             onFilterPanelOpenChange={setFilterPanelOpen}
             filterPanelOpen={filterPanelOpen}
             initialSelectedCell={
-              focusClassroomId && focusDayId && focusTimeSlotId
+              openFocusedCellPanel &&
+              resolvedFocusClassroomId &&
+              resolvedFocusDayId &&
+              resolvedFocusTimeSlotId
                 ? {
-                    classroomId: focusClassroomId,
-                    dayId: focusDayId,
-                    timeSlotId: focusTimeSlotId,
+                    classroomId: resolvedFocusClassroomId,
+                    dayId: resolvedFocusDayId,
+                    timeSlotId: resolvedFocusTimeSlotId,
                   }
                 : null
             }

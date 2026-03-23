@@ -12,6 +12,7 @@ import { parseLocalDate } from '@/lib/utils/date'
 import { isCellClosed, getMatchingClosure } from '@/lib/utils/school-closures'
 import { isSlotEffectivelyInactive } from '@/lib/utils/schedule-slot-activity'
 import { SCHEDULE_INACTIVE_LEGEND_DOT_CLASS } from '@/lib/ui/schedule-inactive-tokens'
+import { adminRoleColorValues } from '@/lib/utils/colors'
 
 interface SchoolClosureForGrid {
   date: string
@@ -207,6 +208,18 @@ function ScheduleLegend({
           style={{ borderColor: '#3b82f6' }}
         >
           Flex Teacher
+        </span>
+      </div>
+      <div className="flex items-center gap-2">
+        <span
+          className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border"
+          style={{
+            backgroundColor: adminRoleColorValues.bg,
+            borderColor: adminRoleColorValues.border,
+            color: adminRoleColorValues.text,
+          }}
+        >
+          Admin
         </span>
       </div>
       {showLegendTemporaryCoverage && (

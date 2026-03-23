@@ -59,6 +59,7 @@ interface SubFinderCardProps {
     time_slot_code: string
     status: 'assigned' | 'available' | 'unavailable'
     reason?: string
+    classroom_id?: string | null
     classroom_name?: string | null
     class_name?: string | null
     classroom_color?: string | null
@@ -341,6 +342,7 @@ export default function SubFinderCard({
                       ? mappedAssignedSubNames
                       : undefined,
                   reason: thisSubCannotCoverReason.get(key),
+                  classroom_id: shift.classroom_id ?? null,
                   classroom_name: shift.classroom_name ?? null,
                   class_name: shift.class_name ?? null,
                   classroom_color: shift.classroom_color ?? null,
@@ -557,6 +559,7 @@ export default function SubFinderCard({
                         ? shift.assigned_sub_names
                         : undefined,
                     reason: thisSubCannotCoverReason.get(key),
+                    classroom_id: shift.classroom_id ?? null,
                     classroom_name: shift.classroom_name || null,
                     class_name: shift.class_name || null,
                     classroom_color: shift.classroom_color ?? null,

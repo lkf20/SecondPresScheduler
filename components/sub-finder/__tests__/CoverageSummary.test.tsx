@@ -66,7 +66,7 @@ describe('CoverageSummary', () => {
 
     render(<CoverageSummary shifts={shifts} onShiftClick={onShiftClick} />)
 
-    expect(screen.getByText(/1 of 2 shifts require subs/i)).toBeInTheDocument()
+    expect(screen.getByText('1 of 2 shifts need coverage')).toBeInTheDocument()
     expect(screen.getByText(/1 shift covered by sally a\./i)).toBeInTheDocument()
     expect(screen.getByText('covered:1')).toBeInTheDocument()
     expect(screen.getByText('uncovered:1')).toBeInTheDocument()

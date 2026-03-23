@@ -309,6 +309,8 @@ describe('POST /api/sub-finder/find-subs-manual integration', () => {
       shifts_covered: 1,
       total_shifts: 1,
     })
+    expect(json.subs[0].remaining_shift_keys).toEqual(['2026-02-10|EM|Infant Room'])
+    expect(json.subs[0].remaining_shift_count).toBe(1)
   })
 
   it('marks sub as unavailable when there is a schedule conflict', async () => {

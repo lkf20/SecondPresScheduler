@@ -164,6 +164,7 @@ When adding or changing UI that conveys status, urgency, or warnings:
 
 1. **Use `StaffingStatusBadge`** for staffing status (below required/preferred, above target, on target).
 2. **Use `lib/utils/colors.ts`** — Import `staffingColorValues`, `coverageColorValues`, `semanticColors`, or the appropriate helper for other color needs instead of hardcoding Tailwind color classes.
-3. **Match the semantic tier** — Red = critical, Orange = uncovered, Amber = warning, Yellow = soft. Do not introduce new ad-hoc colors for these concepts.
-4. **If extending the system** — Add new constants to `lib/utils/colors.ts`, include both Tailwind classes and RGB values (for inline styles), and document in this file.
-5. **AGENTS.md** — See the "Color consistency" section for agent and contributor instructions.
+3. **Admin staff role** — Use `adminRoleColorValues` (violet) for Admin chips on the Staff list and match the Weekly Schedule legend “Admin” chip.
+4. **Match the semantic tier** — Red = critical, Orange = uncovered, Amber = warning, Yellow = soft. Do not introduce new ad-hoc colors for these concepts.
+5. **If extending the system** — Add new constants to `lib/utils/colors.ts`, include both Tailwind classes and RGB values (for inline styles), and document in this file.
+6. **AGENTS.md** — See the "Color consistency" section for agent and contributor instructions.

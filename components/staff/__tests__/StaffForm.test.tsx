@@ -81,6 +81,7 @@ describe('StaffForm role combinations', () => {
   const roleTypes = [
     { id: 'role-perm', code: 'PERMANENT', label: 'Permanent' },
     { id: 'role-flex', code: 'FLEXIBLE', label: 'Flexible' },
+    { id: 'role-admin', code: 'ADMIN', label: 'Admin' },
   ] as any
 
   const fillRequiredFields = async (user: ReturnType<typeof userEvent.setup>) => {
@@ -115,6 +116,20 @@ describe('StaffForm role combinations', () => {
       primaryRoleLabel: /Flexible/i,
       subChecked: true,
       expectedRoleIds: ['role-flex'],
+      expectedIsSub: true,
+    },
+    {
+      name: 'admin only',
+      primaryRoleLabel: /Admin/i,
+      subChecked: false,
+      expectedRoleIds: ['role-admin'],
+      expectedIsSub: false,
+    },
+    {
+      name: 'admin + sub',
+      primaryRoleLabel: /Admin/i,
+      subChecked: true,
+      expectedRoleIds: ['role-admin'],
       expectedIsSub: true,
     },
     {
@@ -164,10 +179,31 @@ describe('StaffForm role combinations', () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText('Select at least one: Permanent, Flexible, or Substitute.')
+        screen.getByText('Select at least one: Permanent, Flexible, Admin, or Substitute.')
       ).toBeInTheDocument()
     })
     expect(onSubmit).not.toHaveBeenCalled()
+  })
+
+  it('selecting Admin clears Permanent primary role', async () => {
+    const user = userEvent.setup()
+    const onSubmit = jest.fn(async () => true)
+
+    render(<StaffForm roleTypes={roleTypes} onSubmit={onSubmit} />)
+
+    await fillRequiredFields(user)
+    await user.click(screen.getByLabelText(/Permanent/i))
+    await user.click(screen.getByRole('radio', { name: 'Admin' }))
+
+    await user.click(screen.getByRole('button', { name: 'Create' }))
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1))
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        role_type_ids: ['role-admin'],
+        is_sub: false,
+      })
+    )
   })
 
   it('forces substitute eligibility on and locked when Substitute only is selected', async () => {

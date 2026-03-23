@@ -8,12 +8,22 @@ import { cn } from '@/lib/utils'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { sortShiftDetailsByDisplayOrder } from '@/lib/utils/shift-display-order'
 import { PARTIAL_APPROX_LABEL, PARTIAL_APPROX_TOOLTIP } from '@/lib/schedules/coverage-weights'
+import {
+  FLOATER_SHIFT_GROUP_CONTAINER_CLASS,
+  FLOATER_SHIFT_GROUP_HEADER_CLASS,
+  floaterGroupHeaderLabel,
+  groupShiftsForFloaterUi,
+  SHIFT_COUNT_SEMANTICS_TOOLTIP,
+} from '@/lib/sub-finder/floater-shift-groups'
+import { Info } from 'lucide-react'
 
 interface ShiftDetail {
   id: string
   date: string
   day_name: string
   time_slot_code: string
+  /** When set (e.g. multi-room floater), shown instead of formatShiftLabel(date, code) */
+  shift_label?: string | null
   status: 'uncovered' | 'partially_covered' | 'fully_covered'
   sub_name?: string | null
   /** Multiple sub names for partially covered shifts (each partial assignment) */
@@ -103,7 +113,9 @@ export default function CoverageSummary({
     )
   ) as string[]
   const partialCount = shift_details.filter(s => s.status === 'partially_covered').length
-  const headerLabel = headerText ?? `${uncovered} of ${totalShifts} Shifts Require Subs`
+  const remainingNeedingCoverage = uncovered + (shifts.partially_covered ?? 0)
+  const headerLabel =
+    headerText ?? `${remainingNeedingCoverage} of ${totalShifts} shifts need coverage`
   const headerClass =
     variant === 'compact' ? 'text-lg font-normal text-slate-700' : getHeaderClasses('xl')
   return (
@@ -116,8 +128,24 @@ export default function CoverageSummary({
     >
       {/* Header */}
       <div className={cn('flex flex-wrap items-center gap-3', coveredCount > 0 ? 'mb-2' : 'mb-0')}>
-        <div className={headerClass}>
-          {headerLabel}
+        <div className={cn(headerClass, 'inline-flex flex-wrap items-center gap-2')}>
+          <span>{headerLabel}</span>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  className="inline-flex shrink-0 rounded p-0.5 text-slate-500 hover:text-slate-800"
+                  aria-label="How shift count works"
+                >
+                  <Info className="h-4 w-4" aria-hidden />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-xs text-sm">
+                {SHIFT_COUNT_SEMANTICS_TOOLTIP}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           {partialCount > 0 ? (
             <TooltipProvider>
               <Tooltip>
@@ -198,73 +226,99 @@ export default function CoverageSummary({
 
       {variant === 'compact' ? null : (
         <TooltipProvider>
-          <div className="mt-3 flex flex-wrap gap-1.5 pb-2">
-            {sortedShifts.map(shift => {
-              const isClickable =
-                shift.status === 'fully_covered' || shift.status === 'partially_covered'
-              const baseLabel = formatShiftLabel(shift.date, shift.time_slot_code)
-              const badgeStyles = getBadgeStyles(shift)
-              const isFullyCovered = shift.status === 'fully_covered' && shift.sub_name
+          <div className="mt-3 flex flex-wrap items-start gap-3 gap-y-2 pb-2">
+            {groupShiftsForFloaterUi(sortedShifts).map((group, gIdx) => {
+              const renderOneBadge = (shift: ShiftDetail) => {
+                const isClickable =
+                  shift.status === 'fully_covered' || shift.status === 'partially_covered'
+                const baseLabel =
+                  shift.shift_label?.trim() || formatShiftLabel(shift.date, shift.time_slot_code)
+                const badgeStyles = getBadgeStyles(shift)
+                const isFullyCovered = shift.status === 'fully_covered' && shift.sub_name
 
-              const badgeContent = (
-                <span
-                  className={cn(
-                    'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-normal transition-colors',
-                    isClickable ? 'cursor-pointer hover:shadow-sm transition-shadow' : ''
-                  )}
-                  style={badgeStyles}
-                  onClick={() => {
-                    if (isClickable && onShiftClick) {
-                      onShiftClick(shift)
-                    }
-                  }}
-                >
-                  {shift.status === 'fully_covered' && shift.sub_name ? (
-                    <>
-                      {baseLabel} - <span className="font-bold">{shift.sub_name}</span>
-                    </>
-                  ) : shift.status === 'partially_covered' ? (
-                    <>
-                      {baseLabel}
-                      {(shift.sub_names && shift.sub_names.length > 0) || shift.sub_name ? (
-                        <>
-                          {' '}
-                          -{' '}
-                          <span className="font-bold">
-                            {shift.sub_names && shift.sub_names.length > 0
-                              ? shift.sub_names.join(', ')
-                              : shift.sub_name}
-                          </span>{' '}
-                          (partial)
-                          {shift.partial_time_windows && shift.partial_time_windows.length > 0 ? (
-                            <span className="font-normal">
-                              {' '}
-                              {shift.partial_time_windows.join(', ')}
-                            </span>
-                          ) : null}
-                        </>
-                      ) : null}
-                    </>
-                  ) : (
-                    baseLabel
-                  )}
-                </span>
-              )
-
-              // Wrap in tooltip if fully covered with sub name
-              if (isFullyCovered) {
-                return (
-                  <Tooltip key={shift.id}>
-                    <TooltipTrigger asChild>{badgeContent}</TooltipTrigger>
-                    <TooltipContent>
-                      <p>Assigned to {shift.sub_name}</p>
-                    </TooltipContent>
-                  </Tooltip>
+                const badgeContent = (
+                  <span
+                    className={cn(
+                      'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-normal transition-colors',
+                      isClickable ? 'cursor-pointer hover:shadow-sm transition-shadow' : ''
+                    )}
+                    style={badgeStyles}
+                    onClick={() => {
+                      if (isClickable && onShiftClick) {
+                        onShiftClick(shift)
+                      }
+                    }}
+                  >
+                    {shift.status === 'fully_covered' && shift.sub_name ? (
+                      <>
+                        {baseLabel} - <span className="font-bold">{shift.sub_name}</span>
+                      </>
+                    ) : shift.status === 'partially_covered' ? (
+                      <>
+                        {baseLabel}
+                        {(shift.sub_names && shift.sub_names.length > 0) || shift.sub_name ? (
+                          <>
+                            {' '}
+                            -{' '}
+                            <span className="font-bold">
+                              {shift.sub_names && shift.sub_names.length > 0
+                                ? shift.sub_names.join(', ')
+                                : shift.sub_name}
+                            </span>{' '}
+                            (partial)
+                            {shift.partial_time_windows && shift.partial_time_windows.length > 0 ? (
+                              <span className="font-normal">
+                                {' '}
+                                {shift.partial_time_windows.join(', ')}
+                              </span>
+                            ) : null}
+                          </>
+                        ) : null}
+                      </>
+                    ) : (
+                      baseLabel
+                    )}
+                  </span>
                 )
+
+                if (isFullyCovered) {
+                  return (
+                    <Tooltip>
+                      <TooltipTrigger asChild>{badgeContent}</TooltipTrigger>
+                      <TooltipContent>
+                        <p>Assigned to {shift.sub_name}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  )
+                }
+
+                return badgeContent
               }
 
-              // Return badgeContent with key using React.cloneElement
-              return React.cloneElement(badgeContent, { key: shift.id })
+              if (group.kind === 'single') {
+                return (
+                  <React.Fragment key={group.shift.id}>
+                    {renderOneBadge(group.shift)}
+                  </React.Fragment>
+                )
+              }
+              return (
+                <div
+                  key={`floater-${group.slotKey}-${gIdx}`}
+                  role="group"
+                  aria-label={floaterGroupHeaderLabel(group.shifts)}
+                  className={`w-full min-w-0 ${FLOATER_SHIFT_GROUP_CONTAINER_CLASS}`}
+                >
+                  <div className={FLOATER_SHIFT_GROUP_HEADER_CLASS}>
+                    {floaterGroupHeaderLabel(group.shifts)}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {group.shifts.map(s => (
+                      <React.Fragment key={s.id}>{renderOneBadge(s)}</React.Fragment>
+                    ))}
+                  </div>
+                </div>
+              )
             })}
           </div>
         </TooltipProvider>

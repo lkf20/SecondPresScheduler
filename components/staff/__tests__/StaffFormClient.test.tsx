@@ -29,6 +29,9 @@ const staffEditorTabsMock = jest.fn((props: any) => (
     data-show-availability={props.showAvailabilityTab}
     data-active-tab={props.activeTab}
   >
+    <button type="button" onClick={() => props.onActiveTabChange('overview')}>
+      Go Overview
+    </button>
     <button type="button" onClick={() => props.onActiveTabChange('availability')}>
       Go Availability
     </button>
@@ -229,6 +232,69 @@ describe('StaffFormClient', () => {
     })
   })
 
+  it('stays on Overview when toggling substitute eligibility if URL has tab=preferences', async () => {
+    const user = userEvent.setup()
+    mockSearchParams = new URLSearchParams('tab=preferences')
+
+    global.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/api/staff-role-types')) {
+        return {
+          ok: true,
+          json: async () => [
+            { id: 'role-perm', code: 'PERMANENT', label: 'Permanent' },
+            { id: 'role-flex', code: 'FLEXIBLE', label: 'Flexible' },
+          ],
+        } as Response
+      }
+      if (url.includes('/api/schedule-settings')) {
+        return {
+          ok: true,
+          json: async () => ({ default_display_name_format: 'first_last_initial' }),
+        } as Response
+      }
+      if (url.includes('/api/staff')) {
+        return { ok: true, json: async () => [{ id: 'staff-1' }] } as Response
+      }
+      return { ok: true, json: async () => ({}) } as Response
+    }) as jest.Mock
+
+    render(
+      <StaffFormClient
+        staff={
+          {
+            id: 'staff-tab-stay-overview',
+            first_name: 'Amy',
+            last_name: 'P',
+            active: true,
+            is_sub: true,
+            school_id: 'school-1',
+            role_type_ids: ['role-perm'],
+            role_type_codes: ['PERMANENT'],
+          } as any
+        }
+      />
+    )
+
+    await waitFor(() => {
+      expect(screen.getByTestId('staff-editor-tabs')).toHaveAttribute(
+        'data-active-tab',
+        'preferences'
+      )
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Go Overview' }))
+    await waitFor(() => {
+      expect(screen.getByTestId('staff-editor-tabs')).toHaveAttribute('data-active-tab', 'overview')
+    })
+
+    await user.click(await screen.findByLabelText('Eligible to be assigned as a substitute'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('staff-editor-tabs')).toHaveAttribute('data-active-tab', 'overview')
+    })
+  })
+
   it('prompts before switching tabs when overview has unsaved changes', async () => {
     const user = userEvent.setup()
 
@@ -387,5 +453,52 @@ describe('StaffFormClient', () => {
 
     expect(pushMock).toHaveBeenCalledWith('/staff')
     expect(backMock).not.toHaveBeenCalled()
+  })
+
+  it('shows Admin primary role when staff-role-types API includes ADMIN', async () => {
+    global.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/api/staff-role-types')) {
+        return {
+          ok: true,
+          json: async () => [
+            { id: 'role-perm', code: 'PERMANENT', label: 'Permanent' },
+            { id: 'role-flex', code: 'FLEXIBLE', label: 'Flexible' },
+            { id: 'role-admin', code: 'ADMIN', label: 'Admin' },
+          ],
+        } as Response
+      }
+      if (url.includes('/api/schedule-settings')) {
+        return {
+          ok: true,
+          json: async () => ({ default_display_name_format: 'first_last_initial' }),
+        } as Response
+      }
+      if (url.includes('/api/staff')) {
+        return { ok: true, json: async () => [{ id: 'staff-1' }] } as Response
+      }
+      return { ok: true, json: async () => ({}) } as Response
+    }) as jest.Mock
+
+    render(
+      <StaffFormClient
+        staff={
+          {
+            id: 'staff-admin-ui',
+            first_name: 'Amy',
+            last_name: 'P',
+            active: true,
+            is_sub: false,
+            school_id: 'school-1',
+            role_type_ids: [],
+            role_type_codes: [],
+          } as any
+        }
+      />
+    )
+
+    await waitFor(() => {
+      expect(screen.getByRole('radio', { name: 'Admin' })).toBeInTheDocument()
+    })
   })
 })

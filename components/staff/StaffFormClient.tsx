@@ -17,7 +17,10 @@ import { toast } from 'sonner'
 import { useQueryClient } from '@tanstack/react-query'
 import { useSchool } from '@/lib/contexts/SchoolContext'
 import { useUnsavedNavigationGuard } from '@/lib/hooks/use-unsaved-navigation-guard'
-import { invalidateSchedulingSurfaces } from '@/lib/utils/invalidation'
+import {
+  invalidateSchedulingSurfaces,
+  invalidateStaffAssignmentPicklists,
+} from '@/lib/utils/invalidation'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -246,11 +249,10 @@ export default function StaffFormClient({
     }
   }, [pendingTabSwitch, pendingTabAfterSave, resolveTargetTab])
 
+  // Deep-link: sync tab from URL only when the query param changes. Do not depend on
+  // showAvailability here — toggling "Eligible to be assigned as a substitute" updates
+  // showAvailability and would otherwise re-apply ?tab=preferences and jump away from Overview.
   useEffect(() => {
-    if (requestedTab === 'availability') {
-      setActiveTab(showAvailability ? 'availability' : 'overview')
-      return
-    }
     if (requestedTab === 'preferences') {
       setActiveTab('preferences')
       return
@@ -258,6 +260,12 @@ export default function StaffFormClient({
     if (requestedTab === 'notes') {
       setActiveTab('notes')
     }
+  }, [requestedTab])
+
+  // Deep-link: availability tab — also react when sub eligibility changes (hide tab / leave it).
+  useEffect(() => {
+    if (requestedTab !== 'availability') return
+    setActiveTab(showAvailability ? 'availability' : 'overview')
   }, [requestedTab, showAvailability])
 
   useEffect(() => {
@@ -391,9 +399,12 @@ export default function StaffFormClient({
         throw new Error(errorData.error || 'Failed to update staff')
       }
 
-      await invalidateSchedulingSurfaces(queryClient, schoolId, {
-        includeFilterOptions: false,
-      })
+      await Promise.all([
+        invalidateSchedulingSurfaces(queryClient, schoolId, {
+          includeFilterOptions: false,
+        }),
+        invalidateStaffAssignmentPicklists(queryClient, schoolId),
+      ])
       setSavedIsActive(isActive)
       setIsOverviewDirty(false)
       router.refresh()

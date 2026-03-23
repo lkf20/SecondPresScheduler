@@ -32,6 +32,7 @@ import {
 import { formatUSPhone } from '@/lib/utils/phone'
 import { useSchool } from '@/lib/contexts/SchoolContext'
 import { invalidateSchedulingSurfaces } from '@/lib/utils/invalidation'
+import { adminRoleColorValues } from '@/lib/utils/colors'
 
 interface StaffPageClientProps {
   staff: StaffWithRole[]
@@ -39,7 +40,7 @@ interface StaffPageClientProps {
   defaultDisplayNameFormat?: DisplayNameFormat
 }
 
-type FilterKey = 'permanent' | 'flexible' | 'substitute'
+type FilterKey = 'permanent' | 'flexible' | 'admin' | 'substitute'
 type ClassGroupOption = { id: string; name: string; is_active?: boolean | null }
 
 type ScheduleSettingsResponse = {
@@ -54,7 +55,7 @@ const formatOptions: Array<{ value: DisplayNameFormat; label: string }> = [
   { value: 'first_name', label: 'First Name' },
 ]
 
-const VALID_FILTERS: FilterKey[] = ['permanent', 'flexible', 'substitute']
+const VALID_FILTERS: FilterKey[] = ['permanent', 'flexible', 'admin', 'substitute']
 
 function filterFromParam(param: string | null): FilterKey | null {
   if (param && VALID_FILTERS.includes(param as FilterKey)) return param as FilterKey
@@ -183,6 +184,7 @@ export default function StaffPageClient({
       const orderedRoleLabels: string[] = []
       if (roleCodes.includes('PERMANENT')) orderedRoleLabels.push('Permanent')
       if (roleCodes.includes('FLEXIBLE')) orderedRoleLabels.push('Flexible')
+      if (roleCodes.includes('ADMIN')) orderedRoleLabels.push('Admin')
       if (member.is_sub) orderedRoleLabels.push('Substitute')
 
       const { name: computedName, isCustom } = computeDisplayName(member, defaultFormat)
@@ -195,6 +197,7 @@ export default function StaffPageClient({
         role_codes: roleCodes,
         is_permanent: roleCodes.includes('PERMANENT'),
         is_flexible: roleCodes.includes('FLEXIBLE'),
+        is_admin: roleCodes.includes('ADMIN'),
         computed_display_name: computedName,
         is_custom_display_name: isCustom,
       }
@@ -211,10 +214,11 @@ export default function StaffPageClient({
       (acc, member) => {
         if (member.is_permanent) acc.permanent += 1
         if (member.is_flexible) acc.flexible += 1
+        if (member.is_admin) acc.admin += 1
         if (member.is_sub) acc.substitute += 1
         return acc
       },
-      { permanent: 0, flexible: 0, substitute: 0 }
+      { permanent: 0, flexible: 0, admin: 0, substitute: 0 }
     )
   }, [visibleStaffPool])
 
@@ -225,6 +229,7 @@ export default function StaffPageClient({
     return visibleStaffPool.filter(member => {
       if (activeFilter === 'permanent') return member.is_permanent
       if (activeFilter === 'flexible') return member.is_flexible
+      if (activeFilter === 'admin') return member.is_admin
       if (activeFilter === 'substitute') return member.is_sub
       return false
     })
@@ -411,6 +416,21 @@ export default function StaffPageClient({
                     key={label}
                     className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-800 border border-blue-500 border-dashed"
                     style={{ borderColor: '#3b82f6' }}
+                  >
+                    {label}
+                  </span>
+                )
+              }
+              if (label === 'Admin') {
+                return (
+                  <span
+                    key={label}
+                    className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border"
+                    style={{
+                      backgroundColor: adminRoleColorValues.bg,
+                      borderColor: adminRoleColorValues.border,
+                      color: adminRoleColorValues.text,
+                    }}
                   >
                     {label}
                   </span>
@@ -638,6 +658,17 @@ export default function StaffPageClient({
           }
         >
           Flexible Teachers ({counts.flexible})
+        </button>
+        <button
+          type="button"
+          onClick={() => toggleFilter('admin')}
+          className={
+            activeFilter === 'admin'
+              ? 'rounded-full border border-button-fill bg-button-fill px-3 py-1 text-xs font-medium text-button-fill-foreground'
+              : 'rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 hover:border-slate-300'
+          }
+        >
+          Admin ({counts.admin})
         </button>
         <button
           type="button"

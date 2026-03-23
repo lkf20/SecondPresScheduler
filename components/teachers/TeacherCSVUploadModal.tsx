@@ -1,6 +1,9 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import { useSchool } from '@/lib/contexts/SchoolContext'
+import { invalidateStaffAssignmentPicklists } from '@/lib/utils/invalidation'
 import {
   Dialog,
   DialogContent,
@@ -66,6 +69,8 @@ export default function TeacherCSVUploadModal({
   onClose,
   onImportComplete,
 }: TeacherCSVUploadModalProps) {
+  const queryClient = useQueryClient()
+  const schoolId = useSchool()
   const [parsedData, setParsedData] = useState<ParsedTeacher[]>([])
   const [roleTypes, setRoleTypes] = useState<StaffRoleType[]>([])
   const [isValidating, setIsValidating] = useState(false)
@@ -408,6 +413,10 @@ Bob Johnson,,bob@example.com,555-5678,Permanent,Active,`
 
       const result = await response.json()
       setImportResults(result)
+
+      if (result.success > 0 || result.replaced > 0) {
+        await invalidateStaffAssignmentPicklists(queryClient, schoolId)
+      }
 
       if (result.errors === 0) {
         setTimeout(() => {

@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState, useMemo } from 'react'
+import { useSchoolTeachersQuery } from '@/lib/hooks/use-school-teachers-query'
 import { useSubFinderAbsences, type SubFinderAbsence } from '@/lib/hooks/use-sub-finder-absences'
 import { useSubRecommendations } from '@/lib/hooks/use-sub-recommendations'
 import type { RecommendedCombination } from '@/lib/utils/sub-combination'
@@ -34,7 +35,9 @@ export interface Absence {
       date: string
       day_name: string
       time_slot_code: string
+      shift_label?: string | null
       class_name: string | null
+      classroom_id?: string | null
       classroom_name: string | null
       classroom_color?: string | null
       status: 'uncovered' | 'partially_covered' | 'fully_covered'
@@ -61,7 +64,9 @@ export interface Absence {
       date: string
       day_name: string
       time_slot_code: string
+      shift_label?: string | null
       class_name: string | null
+      classroom_id?: string | null
       classroom_name: string | null
       classroom_color?: string | null
       status: 'uncovered' | 'partially_covered' | 'fully_covered'
@@ -113,6 +118,7 @@ export interface SubCandidate {
     date: string
     day_name: string
     time_slot_code: string
+    classroom_id?: string | null
     class_name: string | null
     classroom_name?: string | null
   }>
@@ -120,6 +126,7 @@ export interface SubCandidate {
     date: string
     day_name: string
     time_slot_code: string
+    classroom_id?: string | null
     reason: string
     classroom_name?: string | null
   }>
@@ -127,6 +134,7 @@ export interface SubCandidate {
     date: string
     day_name: string
     time_slot_code: string
+    classroom_id?: string | null
     classroom_name?: string | null
   }>
   remaining_shift_keys?: string[]
@@ -135,6 +143,7 @@ export interface SubCandidate {
   shift_chips?: Array<{
     date: string
     time_slot_code: string
+    classroom_id?: string | null
     status: 'assigned' | 'available' | 'unavailable'
     reason?: string
     classroom_name?: string | null
@@ -177,7 +186,6 @@ export function useSubFinderData({
   const [includePartiallyCovered, setIncludePartiallyCovered] = useState(false)
   const [includeFlexibleStaff, setIncludeFlexibleStaff] = useState(true)
   const [includeOnlyRecommended, setIncludeOnlyRecommended] = useState(false)
-  const [teachers, setTeachers] = useState<Teacher[]>([])
   const { format: displayNameFormat } = useDisplayNameFormat()
 
   // Use React Query for absences
@@ -221,7 +229,9 @@ export function useSubFinderData({
           date: detail.date,
           day_name: detail.day_name,
           time_slot_code: detail.time_slot_code,
+          shift_label: detail.shift_label ?? null,
           class_name: detail.class_name || null,
+          classroom_id: (detail as any).classroom_id || null,
           classroom_name: detail.classroom_name || null,
           classroom_color: detail.classroom_color || null,
           status:
@@ -257,7 +267,9 @@ export function useSubFinderData({
           date: detail.date,
           day_name: detail.day_name,
           time_slot_code: detail.time_slot_code,
+          shift_label: detail.shift_label ?? null,
           class_name: detail.class_name || null,
+          classroom_id: (detail as any).classroom_id || null,
           classroom_name: detail.classroom_name || null,
           classroom_color: detail.classroom_color || null,
           status:
@@ -359,6 +371,13 @@ export function useSubFinderData({
     },
     [displayNameFormat]
   )
+
+  const { data: teachersRaw = [] } = useSchoolTeachersQuery()
+  const teachers = useMemo(() => {
+    return (teachersRaw as Teacher[])
+      .filter(teacher => teacher.active !== false)
+      .sort((a, b) => getDisplayName(a).localeCompare(getDisplayName(b)))
+  }, [teachersRaw, getDisplayName])
 
   const applySubResults = useCallback(
     (
@@ -552,25 +571,6 @@ export function useSubFinderData({
       setRecommendedCombinations([])
     }
   }, [includeOnlyRecommended, selectedAbsence, allSubs, applySubResults])
-
-  useEffect(() => {
-    const fetchTeachers = async () => {
-      try {
-        const response = await fetch('/api/teachers')
-        if (!response.ok) throw new Error('Failed to fetch teachers')
-        const data = await response.json()
-        const sortedTeachers = (data as Teacher[])
-          .filter(teacher => teacher.active !== false)
-          .sort((a, b) => getDisplayName(a).localeCompare(getDisplayName(b)))
-        setTeachers(sortedTeachers)
-      } catch (error) {
-        console.error('Error fetching teachers:', error)
-        setTeachers([])
-      }
-    }
-
-    fetchTeachers()
-  }, [getDisplayName])
 
   return {
     absences,

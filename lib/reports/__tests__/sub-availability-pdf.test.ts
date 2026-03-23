@@ -115,6 +115,8 @@ describe('sub availability pdf report helpers', () => {
     })
 
     expect(html).toContain('availability-mark')
+    expect(html).toContain('availability-mark-icon')
+    expect(html).toContain('<svg class="availability-mark-icon"')
     expect(html).toContain('Available to teach')
     expect(html).not.toContain('>Notes<')
   })

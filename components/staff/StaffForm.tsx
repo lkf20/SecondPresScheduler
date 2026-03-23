@@ -48,7 +48,7 @@ const staffSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['role_type_ids'],
-        message: 'Select at least one: Permanent, Flexible, or Substitute.',
+        message: 'Select at least one: Permanent, Flexible, Admin, or Substitute.',
       })
     }
   })
@@ -406,13 +406,16 @@ export default function StaffForm({
               {(() => {
                 const permanentType = roleTypes.find(r => r.code === 'PERMANENT')
                 const flexibleType = roleTypes.find(r => r.code === 'FLEXIBLE')
+                const adminType = roleTypes.find(r => r.code === 'ADMIN')
                 const primaryRoleValue = roleTypeIds.includes(permanentType?.id ?? '')
                   ? 'permanent'
                   : roleTypeIds.includes(flexibleType?.id ?? '')
                     ? 'flexible'
-                    : isSub
-                      ? 'none'
-                      : ''
+                    : roleTypeIds.includes(adminType?.id ?? '')
+                      ? 'admin'
+                      : isSub
+                        ? 'none'
+                        : ''
                 return (
                   <>
                     <div className="space-y-2">
@@ -425,7 +428,9 @@ export default function StaffForm({
                               ? [permanentType.id]
                               : value === 'flexible' && flexibleType
                                 ? [flexibleType.id]
-                                : []
+                                : value === 'admin' && adminType
+                                  ? [adminType.id]
+                                  : []
                           setValue('role_type_ids', normalizeRoleTypeIds(nextIds), {
                             shouldValidate: true,
                             shouldDirty: true,
@@ -458,6 +463,17 @@ export default function StaffForm({
                               className="font-normal cursor-pointer"
                             >
                               {flexibleType.label}
+                            </Label>
+                          </div>
+                        )}
+                        {adminType && (
+                          <div className="flex items-center space-x-2">
+                            <RadioGroupItem value="admin" id={`role-${adminType.id}`} />
+                            <Label
+                              htmlFor={`role-${adminType.id}`}
+                              className="font-normal cursor-pointer"
+                            >
+                              {adminType.label}
                             </Label>
                           </div>
                         )}

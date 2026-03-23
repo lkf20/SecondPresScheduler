@@ -7,6 +7,7 @@ import type { Resolver, SubmitHandler } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import { useQueryClient } from '@tanstack/react-query'
+import { useSchoolTeachersQuery } from '@/lib/hooks/use-school-teachers-query'
 import { Button } from '@/components/ui/button'
 import DatePickerInput from '@/components/ui/date-picker-input'
 import { Textarea } from '@/components/ui/textarea'
@@ -87,7 +88,6 @@ const TimeOffForm = React.forwardRef<
     const schoolId = useSchool()
     const { format: displayNameFormat } = useDisplayNameFormat()
     const [error, setError] = useState<string | null>(null)
-    const [teachers, setTeachers] = useState<Staff[]>([])
     const [teacherQuery, setTeacherQuery] = useState('')
     const [isTeacherSearchOpen, setIsTeacherSearchOpen] = useState(false)
     const [selectedShifts, setSelectedShifts] = useState<
@@ -154,6 +154,17 @@ const TimeOffForm = React.forwardRef<
         ),
       [displayNameFormat]
     )
+
+    const { data: teachersRaw = [] } = useSchoolTeachersQuery()
+    const teachers = useMemo(() => {
+      const list = teachersRaw as Staff[]
+      return [...list].sort((a, b) => {
+        const nameA = getTeacherDisplayName(a) || ''
+        const nameB = getTeacherDisplayName(b) || ''
+        return nameA.localeCompare(nameB)
+      })
+    }, [teachersRaw, getTeacherDisplayName])
+
     const filteredTeachers = useMemo(() => {
       const query = teacherQuery.trim().toLowerCase()
       if (!query) return teachers
@@ -188,20 +199,6 @@ const TimeOffForm = React.forwardRef<
         document.getElementById('time-off-start-date')?.focus()
       })
     }
-
-    useEffect(() => {
-      fetch('/api/teachers')
-        .then(r => r.json())
-        .then(data => {
-          const sorted = (data as Staff[]).sort((a, b) => {
-            const nameA = getTeacherDisplayName(a) || ''
-            const nameB = getTeacherDisplayName(b) || ''
-            return nameA.localeCompare(nameB)
-          })
-          setTeachers(sorted)
-        })
-        .catch(console.error)
-    }, [getTeacherDisplayName])
 
     const {
       register,

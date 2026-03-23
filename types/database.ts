@@ -231,6 +231,7 @@ export type Database = {
           start_time: string | null
           status: Database['public']['Enums']['coverage_request_shift_status']
           time_slot_id: string
+          time_off_shift_id: string | null
         }
         Insert: {
           class_group_id?: string | null
@@ -246,6 +247,7 @@ export type Database = {
           start_time?: string | null
           status?: Database['public']['Enums']['coverage_request_shift_status']
           time_slot_id: string
+          time_off_shift_id?: string | null
         }
         Update: {
           class_group_id?: string | null
@@ -261,6 +263,7 @@ export type Database = {
           start_time?: string | null
           status?: Database['public']['Enums']['coverage_request_shift_status']
           time_slot_id?: string
+          time_off_shift_id?: string | null
         }
         Relationships: [
           {
@@ -303,6 +306,13 @@ export type Database = {
             columns: ['time_slot_id']
             isOneToOne: false
             referencedRelation: 'time_slots'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'coverage_request_shifts_time_off_shift_id_fkey'
+            columns: ['time_off_shift_id']
+            isOneToOne: false
+            referencedRelation: 'time_off_shifts'
             referencedColumns: ['id']
           },
         ]

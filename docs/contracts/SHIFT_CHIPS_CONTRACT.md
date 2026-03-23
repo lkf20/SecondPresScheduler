@@ -93,6 +93,10 @@ Use availability/status tokens from shared color system (`shiftStatusColorValues
 - Partial is always a **yellow-family semantic** (soft warning tier), never green.
 - Partial assignee pill uses a **clock icon**, not a checkmark.
 - Full assignee pill uses a **check icon**.
+- Distinguish the two meanings of partial in copy/UX:
+  - **time_partial**: one classroom shift has time-window partial assignment (`is_partial=true`).
+  - **room_partial**: multi-room floater absence where some room-level shifts are covered and some are uncovered.
+- `room_partial` must not imply `is_partial=true`; it is represented by room-level shift status aggregation.
 - Multi-partial shifts must not silently collapse to one sub when multiple assignees are available in data:
   - Prefer `assigned_sub_names: string[]` or equivalent canonical array.
   - If UI truncates for space, provide full list in tooltip.
@@ -124,6 +128,20 @@ See: [DAY_ONLY_REASSIGNMENT_CONTRACT.md](./DAY_ONLY_REASSIGNMENT_CONTRACT.md).
 - Tooltip text must not be the only way to convey critical state:
   - chip/pill icon + label must independently communicate uncovered/partial/covered.
 - Ensure sufficient contrast for chip text against background in all states.
+
+---
+
+### Shift identity and floater (multi-room) UI
+
+- **Shift row** (for Sub Finder chips, coverage summaries, and APIs that expose `coverage_request_shifts`): **`date` + `time_slot_code` + classroom** (`classroom_id` preferred; else `classroom_name`). Each classroom at the same calendar slot is its own shift for counts, eligibility, and chip rows.
+- **Legacy slot-only rows** (no classroom): still keyed as `date|time_slot_code` via `getShiftKey` when `classroom_id` and `classroom_name` are absent.
+- **Floater / two rooms at once:** When two or more shift rows share the same `date` and `time_slot_code` but differ by classroom, UIs must **not** collapse them into one chip. Render one chip per room; **group** those chips in a shared container:
+  - Container: light purple, dashed border — match Weekly Schedule floater styling (`bg-purple-100`, `border-dashed border-purple-300`, `text-purple-800` header); see `FLOATER_SHIFT_GROUP_CONTAINER_CLASS` in `lib/sub-finder/floater-shift-groups.ts`.
+  - Header pattern: `{Day} {slot} · {Mon} {d} · Floater · {N} rooms` via `floaterGroupHeaderLabel`.
+- **Copy:** Prefer **“X of Y shifts need coverage”** (not “placements”). Tooltip/helper for end users: `SHIFT_COUNT_SEMANTICS_TOOLTIP` — _Counts each classroom separately when a teacher floats two rooms at the same time._
+- **Recommended (amber) dot:** Remains **per calendar slot** (same slot ⇒ same recommendation hint for all room chips in that slot), not per room row.
+
+Shared helpers: `getShiftKey` / `shiftChipRowKey` (`lib/sub-finder/shift-helpers.ts`, `lib/sub-finder/floater-shift-groups.ts`), grouping `groupShiftsForFloaterUi`.
 
 ---
 

@@ -172,15 +172,115 @@ export async function GET(request: NextRequest) {
     // Transform each request
     const results = await Promise.all(
       filteredRequests.map(async request => {
+        const buildCoverageKey = ({
+          coverageRequestShiftId,
+          date,
+          timeSlotId,
+          classroomId,
+        }: {
+          coverageRequestShiftId?: string | null
+          date: string
+          timeSlotId: string
+          classroomId?: string | null
+        }) =>
+          coverageRequestShiftId
+            ? `crs:${coverageRequestShiftId}`
+            : classroomId
+              ? `${toDateStringISO(date)}|${timeSlotId}|${classroomId}`
+              : `${toDateStringISO(date)}|${timeSlotId}`
+
         // Get shifts (exclude shifts on school closed days, e.g. snow day added after request was created)
-        let shifts: TimeOffShiftWithDetails[] = []
+        let shifts: Array<
+          TimeOffShiftWithDetails & {
+            coverage_request_shift_id?: string | null
+            classroom_id?: string | null
+            classroom_name?: string | null
+            classroom_color?: string | null
+            _coverage_key?: string
+          }
+        > = []
         try {
           const allShifts = await getTimeOffShifts(request.id)
-          shifts = closureList.length
-            ? allShifts.filter(
-                s => !isSlotClosedOnDate(toDateStringISO(s.date), s.time_slot_id, closureList)
-              )
-            : allShifts
+          const normalizedTimeOffShifts = (
+            closureList.length
+              ? allShifts.filter(
+                  s => !isSlotClosedOnDate(toDateStringISO(s.date), s.time_slot_id, closureList)
+                )
+              : allShifts
+          ).map(s => ({
+            ...s,
+            coverage_request_shift_id: null,
+            classroom_id: null,
+            classroom_name: null,
+            classroom_color: null,
+            _coverage_key: buildCoverageKey({
+              date: toDateStringISO(s.date),
+              timeSlotId: s.time_slot_id,
+            }),
+          }))
+
+          const coverageRequestId = (request as { coverage_request_id?: string | null })
+            .coverage_request_id
+          shifts = normalizedTimeOffShifts
+          const allowedSlotKeys = new Set(
+            normalizedTimeOffShifts.map(s => `${toDateStringISO(s.date)}|${s.time_slot_id}`)
+          )
+          if (coverageRequestId) {
+            try {
+              const { data: coverageShifts } = await supabase
+                .from('coverage_request_shifts')
+                .select(
+                  `
+                  id,
+                  date,
+                  day_of_week_id,
+                  time_slot_id,
+                  classroom_id,
+                  day_of_week:days_of_week(name, display_order),
+                  time_slot:time_slots(code, display_order),
+                  classroom:classrooms(name, color)
+                `
+                )
+                .eq('coverage_request_id', coverageRequestId)
+                .eq('status', 'active')
+
+              const normalizedCoverageShifts = (coverageShifts || [])
+                .filter(
+                  (s: any) =>
+                    !isSlotClosedOnDate(toDateStringISO(s.date), s.time_slot_id, closureList)
+                )
+                .filter((s: any) =>
+                  allowedSlotKeys.has(`${toDateStringISO(s.date)}|${s.time_slot_id}`)
+                )
+                .map((s: any) => ({
+                  id: s.id,
+                  date: toDateStringISO(s.date),
+                  day_of_week_id: s.day_of_week_id,
+                  time_slot_id: s.time_slot_id,
+                  day_of_week: s.day_of_week || null,
+                  time_slot: s.time_slot || null,
+                  coverage_request_shift_id: s.id,
+                  classroom_id: s.classroom_id || null,
+                  classroom_name: s.classroom?.name ?? null,
+                  classroom_color: s.classroom?.color ?? null,
+                  _coverage_key: buildCoverageKey({
+                    coverageRequestShiftId: s.id,
+                    date: toDateStringISO(s.date),
+                    timeSlotId: s.time_slot_id,
+                    classroomId: s.classroom_id || null,
+                  }),
+                }))
+              if (normalizedCoverageShifts.length > 0) {
+                shifts = normalizedCoverageShifts as any
+              }
+            } catch (error) {
+              console.warn('[Time Off Requests] Failed to load coverage_request_shifts', {
+                request_id: request.id,
+                coverage_request_id: coverageRequestId,
+                error,
+              })
+            }
+          }
         } catch (error) {
           console.error(`Error fetching shifts for time off request ${request.id}:`, error)
           shifts = []
@@ -192,13 +292,65 @@ export async function GET(request: NextRequest) {
           const requestStartDate = request.start_date
           const requestEndDate = request.end_date || request.start_date
           const shiftKeys = new Set(
-            shifts.map((s: any) => `${toDateStringISO(s.date)}|${s.time_slot_id}`)
+            shifts.map(
+              (s: any) =>
+                s._coverage_key ||
+                buildCoverageKey({
+                  coverageRequestShiftId: s.coverage_request_shift_id || null,
+                  date: toDateStringISO(s.date),
+                  timeSlotId: s.time_slot_id,
+                  classroomId: s.classroom_id || null,
+                })
+            )
           )
+          const shiftKeyByCoverageShiftId = new Map<string, string>(
+            shifts
+              .filter((s: any) => Boolean(s.coverage_request_shift_id))
+              .map((s: any) => [s.coverage_request_shift_id as string, s._coverage_key as string])
+          )
+          const shiftKeyBySlot = new Map<string, string[]>()
+          const shiftKeyBySlotAndClassroom = new Map<string, string>()
+          shifts.forEach((s: any) => {
+            const slotKey = `${toDateStringISO(s.date)}|${s.time_slot_id}`
+            const keys = shiftKeyBySlot.get(slotKey) || []
+            const coverageKey =
+              s._coverage_key ||
+              buildCoverageKey({
+                coverageRequestShiftId: s.coverage_request_shift_id || null,
+                date: toDateStringISO(s.date),
+                timeSlotId: s.time_slot_id,
+                classroomId: s.classroom_id || null,
+              })
+            keys.push(coverageKey)
+            shiftKeyBySlot.set(slotKey, keys)
+            if (s.classroom_id) {
+              shiftKeyBySlotAndClassroom.set(`${slotKey}|${s.classroom_id}`, coverageKey)
+            }
+          })
+          const resolveShiftKey = (input: {
+            coverage_request_shift_id?: string | null
+            date: string
+            time_slot_id: string
+            classroom_id?: string | null
+          }): string | null => {
+            if (input.coverage_request_shift_id) {
+              return shiftKeyByCoverageShiftId.get(input.coverage_request_shift_id) || null
+            }
+            const slotKey = `${toDateStringISO(input.date)}|${input.time_slot_id}`
+            if (input.classroom_id) {
+              const byClass = shiftKeyBySlotAndClassroom.get(`${slotKey}|${input.classroom_id}`)
+              if (byClass) return byClass
+            }
+            const candidates = shiftKeyBySlot.get(slotKey) || []
+            return candidates.length === 1 ? candidates[0] : null
+          }
           const coverageByKey = new Map<
             string,
             {
               date: string
               time_slot_id: string
+              classroom_id?: string | null
+              coverage_request_shift_id?: string | null
               is_partial?: boolean
               assignment_type?: string
               sub?: any
@@ -210,14 +362,19 @@ export async function GET(request: NextRequest) {
           if (coverageRequestId) {
             const { data: crShifts } = await supabase
               .from('coverage_request_shifts')
-              .select('id, date, time_slot_id')
+              .select('id, date, time_slot_id, classroom_id')
               .eq('coverage_request_id', coverageRequestId)
               .eq('status', 'active')
             const crShiftIds = (crShifts || []).map((s: any) => s.id)
             const crShiftKeyById = new Map(
               (crShifts || []).map((s: any) => [
                 s.id,
-                `${toDateStringISO(s.date)}|${s.time_slot_id}`,
+                buildCoverageKey({
+                  coverageRequestShiftId: s.id,
+                  date: toDateStringISO(s.date),
+                  timeSlotId: s.time_slot_id,
+                  classroomId: s.classroom_id || null,
+                }),
               ])
             )
             if (crShiftIds.length > 0) {
@@ -231,11 +388,17 @@ export async function GET(request: NextRequest) {
               ;(linkedAssignments || []).forEach((a: any) => {
                 const key =
                   crShiftKeyById.get(a.coverage_request_shift_id) ??
-                  `${toDateStringISO(a.date)}|${a.time_slot_id}`
-                if (shiftKeys.has(key))
+                  resolveShiftKey({
+                    coverage_request_shift_id: a.coverage_request_shift_id || null,
+                    date: toDateStringISO(a.date),
+                    time_slot_id: a.time_slot_id,
+                  })
+                if (key && shiftKeys.has(key))
                   coverageByKey.set(key, {
                     date: a.date,
                     time_slot_id: a.time_slot_id,
+                    classroom_id: null,
+                    coverage_request_shift_id: a.coverage_request_shift_id || null,
                     is_partial: a.is_partial,
                     assignment_type: a.assignment_type ?? null,
                     sub: a.sub,
@@ -262,11 +425,27 @@ export async function GET(request: NextRequest) {
                 )
               : rawFallback
           const fallbackByKey = new Map(
-            fallbackFiltered.map((a: any) => [`${toDateStringISO(a.date)}|${a.time_slot_id}`, a])
+            fallbackFiltered
+              .map((a: any) => {
+                const key = resolveShiftKey({
+                  coverage_request_shift_id: a.coverage_request_shift_id || null,
+                  date: toDateStringISO(a.date),
+                  time_slot_id: a.time_slot_id,
+                })
+                return key ? [key, a] : null
+              })
+              .filter(Boolean) as Array<[string, any]>
           )
 
           for (const shift of shifts) {
-            const key = `${toDateStringISO(shift.date)}|${shift.time_slot_id}`
+            const key =
+              (shift as any)._coverage_key ||
+              buildCoverageKey({
+                coverageRequestShiftId: (shift as any).coverage_request_shift_id || null,
+                date: toDateStringISO(shift.date),
+                timeSlotId: shift.time_slot_id,
+                classroomId: (shift as any).classroom_id || null,
+              })
             const assignment = coverageByKey.get(key) ?? fallbackByKey.get(key)
             if (assignment) assignments.push(assignment)
           }
@@ -276,6 +455,13 @@ export async function GET(request: NextRequest) {
         const classroomMap = new Map<string, { id: string; name: string; color: string | null }>()
         if (includeClassrooms) {
           shifts.forEach(shift => {
+            if (shift.classroom_id && shift.classroom_name) {
+              classroomMap.set(shift.classroom_id, {
+                id: shift.classroom_id,
+                name: shift.classroom_name,
+                color: shift.classroom_color ?? null,
+              })
+            }
             const scheduleKey = `${request.teacher_id}|${shift.day_of_week_id}|${shift.time_slot_id}`
             const scheduleEntry = scheduleLookup.get(scheduleKey)
             if (scheduleEntry?.classrooms?.size) {
@@ -324,15 +510,20 @@ export async function GET(request: NextRequest) {
           },
           shifts.map(shift => ({
             id: shift.id,
+            coverage_request_shift_id: shift.coverage_request_shift_id ?? null,
             date: shift.date,
             day_of_week_id: shift.day_of_week_id,
             time_slot_id: shift.time_slot_id,
+            classroom_id: shift.classroom_id ?? null,
             day_of_week: shift.day_of_week,
             time_slot: shift.time_slot,
           })),
           assignments.map(assignment => ({
+            id: assignment.id,
+            coverage_request_shift_id: assignment.coverage_request_shift_id ?? null,
             date: assignment.date,
             time_slot_id: assignment.time_slot_id,
+            classroom_id: assignment.classroom_id ?? null,
             is_partial: assignment.is_partial,
             assignment_type: assignment.assignment_type || null,
             sub: assignment.sub as any,
