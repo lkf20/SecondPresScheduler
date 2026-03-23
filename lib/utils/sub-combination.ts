@@ -1,3 +1,5 @@
+import { getShiftKey } from '@/lib/sub-finder/shift-helpers'
+
 interface Sub {
   id: string
   name: string
@@ -12,6 +14,8 @@ interface Sub {
     day_name: string
     time_slot_code: string
     class_name: string | null
+    classroom_id?: string | null
+    classroom_name?: string | null
     diaper_changing_required?: boolean
     lifting_children_required?: boolean
   }>
@@ -19,6 +23,8 @@ interface Sub {
     date: string
     day_name: string
     time_slot_code: string
+    classroom_id?: string | null
+    classroom_name?: string | null
   }>
   can_change_diapers?: boolean
   can_lift_children?: boolean
@@ -31,8 +37,24 @@ interface Shift {
   day_name: string
   time_slot_code: string
   class_name: string | null
+  classroom_id?: string | null
+  classroom_name?: string | null
   diaper_changing_required?: boolean
   lifting_children_required?: boolean
+}
+
+function coverageShiftKey(shift: {
+  date: string
+  time_slot_code: string
+  classroom_id?: string | null
+  classroom_name?: string | null
+}): string {
+  return getShiftKey({
+    date: shift.date,
+    time_slot_code: shift.time_slot_code,
+    classroom_id: shift.classroom_id ?? null,
+    classroom_name: shift.classroom_name ?? null,
+  })
 }
 
 export interface SubAssignment {
@@ -99,7 +121,7 @@ function getUncoveredShifts(subs: Sub[]): Set<string> {
   // Collect all shifts from can_cover
   subs.forEach(sub => {
     sub.can_cover?.forEach(shift => {
-      const shiftKey = `${shift.date}|${shift.time_slot_code}`
+      const shiftKey = coverageShiftKey(shift)
       allShifts.add(shiftKey)
     })
   })
@@ -107,7 +129,7 @@ function getUncoveredShifts(subs: Sub[]): Set<string> {
   // Collect all assigned shifts
   subs.forEach(sub => {
     sub.assigned_shifts?.forEach(shift => {
-      const shiftKey = `${shift.date}|${shift.time_slot_code}`
+      const shiftKey = coverageShiftKey(shift)
       assignedShifts.add(shiftKey)
     })
   })
@@ -141,7 +163,7 @@ function buildCombinationFromSubs(
   const selectedShiftMap = new Map<string, Shift>()
   selectedSubs.forEach(sub => {
     sub.can_cover?.forEach(shift => {
-      const shiftKey = `${shift.date}|${shift.time_slot_code}`
+      const shiftKey = coverageShiftKey(shift)
       if (uncoveredShifts.has(shiftKey) && !selectedShiftMap.has(shiftKey)) {
         selectedShiftMap.set(shiftKey, shift)
       }
@@ -154,7 +176,7 @@ function buildCombinationFromSubs(
     const conflicts = new Map<string, number>()
 
     sub.can_cover?.forEach(shift => {
-      const shiftKey = `${shift.date}|${shift.time_slot_code}`
+      const shiftKey = coverageShiftKey(shift)
       if (uncoveredShifts.has(shiftKey)) {
         availableShifts.set(shiftKey, shift)
         const shiftConflicts = calculateShiftConflicts(shift, sub)
@@ -170,7 +192,6 @@ function buildCombinationFromSubs(
       subCoverage.set(sub.id, { sub, availableShifts, conflicts })
     }
   })
-
   const assignmentsBySub = new Map<string, Shift[]>()
   const coveredShifts = new Set<string>()
 
@@ -229,7 +250,7 @@ function buildCombinationFromSubs(
 
     let remainingShifts = 0
     sub.can_cover?.forEach(shift => {
-      const shiftKey = `${shift.date}|${shift.time_slot_code}`
+      const shiftKey = coverageShiftKey(shift)
       if (uncoveredShifts.has(shiftKey)) {
         remainingShifts++
       }
@@ -282,7 +303,6 @@ export function findTopCombinations(subs: Sub[], limit = 5): RecommendedCombinat
 
   // Get all uncovered shifts
   const uncoveredShifts = getUncoveredShifts(eligibleSubs)
-
   if (uncoveredShifts.size === 0) {
     return []
   }
@@ -293,7 +313,7 @@ export function findTopCombinations(subs: Sub[], limit = 5): RecommendedCombinat
     if (sub.coverage_percent !== 100) return false
     const coverage = new Set<string>()
     sub.can_cover?.forEach(shift => {
-      const key = `${shift.date}|${shift.time_slot_code}`
+      const key = coverageShiftKey(shift)
       if (uncoveredShifts.has(key)) coverage.add(key)
     })
     return coverage.size === uncoveredShifts.size
@@ -304,7 +324,7 @@ export function findTopCombinations(subs: Sub[], limit = 5): RecommendedCombinat
     .map(sub => {
       const coverage = new Set<string>()
       sub.can_cover?.forEach(shift => {
-        const key = `${shift.date}|${shift.time_slot_code}`
+        const key = coverageShiftKey(shift)
         if (uncoveredShifts.has(key)) {
           coverage.add(key)
         }

@@ -4,7 +4,13 @@ const createSub = (overrides: {
   id: string
   name: string
   coverage_percent: number
-  can_cover: Array<{ date: string; time_slot_code: string }>
+  can_cover: Array<{
+    date: string
+    time_slot_code: string
+    day_name?: string
+    class_name?: string | null
+    classroom_name?: string | null
+  }>
 }) => ({
   id: overrides.id,
   name: overrides.name,
@@ -67,6 +73,39 @@ describe('findTopCombinations', () => {
     expect(result[0].subs.length).toBe(1)
     expect(result[1].subs.length).toBe(1)
     expect(result.map(c => c.subs[0].subId).sort()).toEqual(['alice', 'bob'])
+  })
+
+  it('counts floater same slot different rooms as two shifts for 100% coverage', () => {
+    const roomA = {
+      date: '2025-03-17',
+      time_slot_code: 'AM',
+      classroom_name: 'Infant A',
+    }
+    const roomB = {
+      date: '2025-03-17',
+      time_slot_code: 'AM',
+      classroom_name: 'Infant B',
+    }
+    const dayMeta = { day_name: 'Mon', class_name: null as string | null }
+    const subs = [
+      createSub({
+        id: 'floater-sub',
+        name: 'Floater sub',
+        coverage_percent: 100,
+        can_cover: [
+          { ...roomA, ...dayMeta },
+          { ...roomB, ...dayMeta },
+        ],
+      }),
+    ]
+
+    const result = findTopCombinations(subs, 5)
+    expect(result.length).toBe(1)
+    expect(result[0].totalShiftsNeeded).toBe(2)
+    expect(result[0].totalShiftsCovered).toBe(2)
+    expect(result[0].coveragePercent).toBe(100)
+    expect(result[0].subs[0].shiftsCovered).toBe(2)
+    expect(result[0].subs[0].totalShifts).toBe(2)
   })
 
   it('still respects limit when no 100% subs', () => {
