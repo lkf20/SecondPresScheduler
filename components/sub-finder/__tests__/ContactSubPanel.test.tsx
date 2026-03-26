@@ -2265,5 +2265,162 @@ describe('ContactSubPanel', () => {
 
       expect(screen.getByRole('button', { name: /^override$/i })).toBeInTheDocument()
     })
+
+    it('shows separate shift assignment rows for same date/time in different classrooms', async () => {
+      render(
+        <ContactSubPanel
+          isOpen
+          onClose={jest.fn()}
+          variant="inline"
+          sub={{
+            ...baseSub,
+            can_cover: [
+              {
+                date: '2026-02-09',
+                day_name: 'Monday',
+                time_slot_code: 'EM',
+                class_name: 'Infants',
+                classroom_id: 'class-infant',
+                classroom_name: 'Infant Room',
+              },
+              {
+                date: '2026-02-09',
+                day_name: 'Monday',
+                time_slot_code: 'EM',
+                class_name: 'Toddlers',
+                classroom_id: 'class-toddler',
+                classroom_name: 'Toddler Room',
+              },
+            ],
+            cannot_cover: [],
+          }}
+          absence={{
+            ...baseAbsence,
+            shifts: {
+              shift_details: [
+                {
+                  id: 'crs-infant',
+                  date: '2026-02-09',
+                  day_name: 'Monday',
+                  time_slot_code: 'EM',
+                  status: 'uncovered',
+                  classroom_id: 'class-infant',
+                  classroom_name: 'Infant Room',
+                  class_name: 'Infants',
+                },
+                {
+                  id: 'crs-toddler',
+                  date: '2026-02-09',
+                  day_name: 'Monday',
+                  time_slot_code: 'EM',
+                  status: 'uncovered',
+                  classroom_id: 'class-toddler',
+                  classroom_name: 'Toddler Room',
+                  class_name: 'Toddlers',
+                },
+              ],
+            },
+          }}
+          initialContactData={{
+            id: 'contact-1',
+            is_contacted: true,
+            contacted_at: '2026-02-09T12:00:00.000Z',
+            response_status: 'confirmed',
+            notes: '',
+            coverage_request_id: 'coverage-1',
+            selected_shift_keys: [],
+            override_shift_keys: [],
+          }}
+        />
+      )
+
+      await waitFor(() => {
+        expect(screen.getByText('Shift assignments')).toBeInTheDocument()
+      })
+
+      expect(screen.getByText(/infant room/i)).toBeInTheDocument()
+      expect(screen.getByText(/toddler room/i)).toBeInTheDocument()
+    })
+
+    it('shows 100% match for two same-slot classroom shifts when sub can cover both', async () => {
+      render(
+        <ContactSubPanel
+          isOpen
+          onClose={jest.fn()}
+          variant="inline"
+          sub={{
+            ...baseSub,
+            total_shifts: 1,
+            can_cover: [
+              {
+                date: '2026-02-09',
+                day_name: 'Monday',
+                time_slot_code: 'EM',
+                class_name: 'Infants',
+                classroom_id: 'class-infant',
+                classroom_name: 'Infant Room',
+              },
+              {
+                date: '2026-02-09',
+                day_name: 'Monday',
+                time_slot_code: 'EM',
+                class_name: 'Toddlers',
+                classroom_id: 'class-toddler',
+                classroom_name: 'Toddler Room',
+              },
+            ],
+            cannot_cover: [],
+          }}
+          absence={{
+            ...baseAbsence,
+            shifts: {
+              shift_details: [
+                {
+                  id: 'crs-infant',
+                  date: '2026-02-09',
+                  day_name: 'Monday',
+                  time_slot_code: 'EM',
+                  status: 'uncovered',
+                  classroom_id: 'class-infant',
+                  classroom_name: 'Infant Room',
+                  class_name: 'Infants',
+                },
+                {
+                  id: 'crs-toddler',
+                  date: '2026-02-09',
+                  day_name: 'Monday',
+                  time_slot_code: 'EM',
+                  status: 'uncovered',
+                  classroom_id: 'class-toddler',
+                  classroom_name: 'Toddler Room',
+                  class_name: 'Toddlers',
+                },
+              ],
+            },
+          }}
+          initialContactData={{
+            id: 'contact-1',
+            is_contacted: true,
+            contacted_at: '2026-02-09T12:00:00.000Z',
+            response_status: 'confirmed',
+            notes: '',
+            coverage_request_id: 'coverage-1',
+            selected_shift_keys: [],
+            override_shift_keys: [],
+          }}
+        />
+      )
+
+      await waitFor(() => {
+        expect(screen.getByText('100% match')).toBeInTheDocument()
+      })
+
+      expect(
+        screen
+          .getByText(/This sub is available for/i)
+          .textContent?.replace(/\s+/g, ' ')
+          .trim()
+      ).toContain('This sub is available for 2 of 2 remaining shifts.')
+    })
   })
 })

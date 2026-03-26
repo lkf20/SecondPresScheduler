@@ -147,12 +147,16 @@ export interface RecommendedSub {
     time_slot_code: string
     reason: string
     coverage_request_shift_id?: string
+    classroom_id?: string | null
+    classroom_name?: string | null
   }>
   assigned_shifts?: Array<{
     coverage_request_shift_id: string
     date: string
     day_name: string
     time_slot_code: string
+    classroom_id?: string | null
+    classroom_name?: string | null
     is_partial?: boolean
     partial_start_time?: string | null
     partial_end_time?: string | null
@@ -171,6 +175,7 @@ interface Absence {
   end_date: string | null
   shifts?: {
     shift_details?: Array<{
+      id?: string
       date: string
       day_name?: string
       time_slot_code: string
@@ -178,6 +183,7 @@ interface Absence {
       status?: 'uncovered' | 'partially_covered' | 'fully_covered'
       sub_name?: string | null
       sub_id?: string | null
+      classroom_id?: string | null
       classroom_name?: string | null
       class_name?: string | null
       assigned_subs?: Array<{
@@ -214,7 +220,11 @@ interface ContactSubPanelProps {
   variant?: 'sheet' | 'inline'
   initialContactData?: ContactData // Cached contact data from parent
   onAssignmentComplete?: () => void // Callback to refresh data after assignment
-  onChangeShift?: (shift: { date: string; time_slot_code: string }) => void
+  onChangeShift?: (shift: {
+    date: string
+    time_slot_code: string
+    classroom_id?: string | null
+  }) => void
   /** When in manual mode with no time off request, called when user clicks "Create time off for this range" */
   onCreateTimeOffRequest?: () => void
   /** When in manual mode, called when user clicks "Add extra coverage" (temp coverage, no absence) */
@@ -250,6 +260,8 @@ export default function ContactSubPanel({
       date: string
       day_name: string
       time_slot_code: string
+      classroom_id?: string | null
+      classroom_name?: string | null
       is_partial?: boolean
       partial_start_time?: string | null
       partial_end_time?: string | null
@@ -280,6 +292,7 @@ export default function ContactSubPanel({
   const [changeDialogShift, setChangeDialogShift] = useState<{
     date: string
     time_slot_code: string
+    classroom_id?: string | null
     fromSubName?: string | null
     toSubName?: string | null
   } | null>(null)
@@ -403,7 +416,11 @@ export default function ContactSubPanel({
     }
   }
 
-  const handleChangeAssignedShift = (shift: { date: string; time_slot_code: string }) => {
+  const handleChangeAssignedShift = (shift: {
+    date: string
+    time_slot_code: string
+    classroom_id?: string | null
+  }) => {
     onChangeShift?.(shift)
     onClose()
   }
@@ -786,11 +803,11 @@ export default function ContactSubPanel({
       throw new Error('Coverage request or sub data missing')
     }
 
-    const availableShiftKeys = (sub.can_cover || []).map(
-      shift => `${shift.date}|${shift.time_slot_code}`
+    const availableShiftKeys = (sub.can_cover || []).map(shift =>
+      buildShiftKey(shift.date, shift.time_slot_code, shift.classroom_id, shift.classroom_name)
     )
-    const unavailableShiftKeys = (sub.cannot_cover || []).map(
-      shift => `${shift.date}|${shift.time_slot_code}`
+    const unavailableShiftKeys = (sub.cannot_cover || []).map(shift =>
+      buildShiftKey(shift.date, shift.time_slot_code, shift.classroom_id, shift.classroom_name)
     )
 
     const response = await fetch('/api/sub-finder/shift-overrides', {
@@ -912,12 +929,22 @@ export default function ContactSubPanel({
 
     // Check each selected shift for requirements
     const hasDiaperingRequired = sub.can_cover.some(shift => {
-      const shiftKey = `${shift.date}|${shift.time_slot_code}`
+      const shiftKey = buildShiftKey(
+        shift.date,
+        shift.time_slot_code,
+        shift.classroom_id,
+        shift.classroom_name
+      )
       return selectedShiftKeys.includes(shiftKey) && shift.diaper_changing_required
     })
 
     const hasLiftingRequired = sub.can_cover.some(shift => {
-      const shiftKey = `${shift.date}|${shift.time_slot_code}`
+      const shiftKey = buildShiftKey(
+        shift.date,
+        shift.time_slot_code,
+        shift.classroom_id,
+        shift.classroom_name
+      )
       return selectedShiftKeys.includes(shiftKey) && shift.lifting_children_required
     })
 
@@ -1218,42 +1245,29 @@ export default function ContactSubPanel({
     }
     const allKeys = new Set<string>()
     sub.can_cover?.forEach(shift => {
-      allKeys.add(`${shift.date}|${shift.time_slot_code}`)
+      allKeys.add(
+        buildShiftKey(shift.date, shift.time_slot_code, shift.classroom_id, shift.classroom_name)
+      )
     })
     sub.cannot_cover?.forEach(shift => {
-      allKeys.add(`${shift.date}|${shift.time_slot_code}`)
+      allKeys.add(
+        buildShiftKey(shift.date, shift.time_slot_code, shift.classroom_id, shift.classroom_name)
+      )
     })
     sub.assigned_shifts?.forEach(shift => {
-      allKeys.add(`${shift.date}|${shift.time_slot_code}`)
+      allKeys.add(
+        buildShiftKey(shift.date, shift.time_slot_code, shift.classroom_id, shift.classroom_name)
+      )
     })
     const assignedKeys = new Set<string>()
     sub.assigned_shifts?.forEach(shift => {
-      assignedKeys.add(`${shift.date}|${shift.time_slot_code}`)
+      assignedKeys.add(
+        buildShiftKey(shift.date, shift.time_slot_code, shift.classroom_id, shift.classroom_name)
+      )
     })
     return new Set(Array.from(allKeys).filter(key => !assignedKeys.has(key)))
   })()
 
-  const remainingCanCover =
-    sub.can_cover?.filter(shift => {
-      const shiftKey = `${shift.date}|${shift.time_slot_code}`
-      return derivedShiftKeys.has(shiftKey)
-    }) || []
-
-  // When sub has declined all, do not show them as available for any shift (display only).
-  const effectiveRemainingShiftsCovered =
-    responseStatus === 'declined_all' ? 0 : remainingCanCover.length
-
-  const remainingShifts =
-    remainingShiftCount !== null
-      ? remainingShiftCount
-      : typeof sub.remaining_shift_count === 'number'
-        ? sub.remaining_shift_count
-        : sub.total_shifts
-  const remainingShiftsCovered = remainingCanCover.length
-  const matchPercent =
-    remainingShifts > 0 && responseStatus !== 'declined_all'
-      ? Math.round((remainingShiftsCovered / remainingShifts) * 100)
-      : null
   const requestShiftDetails = (() => {
     const details = absence.shifts?.shift_details || []
     return sortShiftDetailsByDisplayOrder([...details])
@@ -1270,19 +1284,77 @@ export default function ContactSubPanel({
           return shift
         })
       : requestShiftDetails
-  const requestTotalShifts = requestShiftDetails.length || remainingShifts
+  const requestTotalShifts =
+    requestShiftDetails.length ||
+    remainingShiftCount ||
+    sub.remaining_shift_count ||
+    sub.total_shifts
   const requestAssignedCount = requestShiftDetailsForDisplay.length
     ? requestShiftDetailsForDisplay.filter(shift => shift.status !== 'uncovered').length
     : assignedShifts.length
   const requestUncoveredCount = Math.max(0, requestTotalShifts - requestAssignedCount)
+  const requestRemainingShiftKeys = (() => {
+    const keys = new Set<string>()
+    requestShiftDetailsForDisplay.forEach(shift => {
+      if (shift.status === 'fully_covered') return
+      keys.add(
+        buildShiftKey(
+          shift.date,
+          shift.time_slot_code,
+          (shift as { classroom_id?: string | null }).classroom_id ?? null,
+          shift.classroom_name ?? null
+        )
+      )
+    })
+    return keys
+  })()
+  const summaryShiftKeys =
+    requestRemainingShiftKeys.size > 0 ? requestRemainingShiftKeys : derivedShiftKeys
+
+  const remainingCanCover =
+    sub.can_cover?.filter(shift => {
+      return shiftKeyInSet(
+        summaryShiftKeys,
+        shift.date,
+        shift.time_slot_code,
+        shift.classroom_id,
+        shift.classroom_name
+      )
+    }) || []
+
+  // When sub has declined all, do not show them as available for any shift (display only).
+  const effectiveRemainingShiftsCovered =
+    responseStatus === 'declined_all' ? 0 : remainingCanCover.length
+
+  const remainingShifts =
+    requestRemainingShiftKeys.size > 0
+      ? requestRemainingShiftKeys.size
+      : remainingShiftCount !== null
+        ? remainingShiftCount
+        : typeof sub.remaining_shift_count === 'number'
+          ? sub.remaining_shift_count
+          : sub.total_shifts
+  const remainingShiftsCovered = remainingCanCover.length
+  const matchPercent =
+    remainingShifts > 0 && responseStatus !== 'declined_all'
+      ? Math.round((remainingShiftsCovered / remainingShifts) * 100)
+      : null
   const assignedShiftByKey = (() => {
     const map = new Map<string, (typeof assignedShifts)[number]>()
     assignedShifts.forEach(shift => {
-      map.set(`${shift.date}|${shift.time_slot_code}`, shift)
+      map.set(
+        buildShiftKey(
+          shift.date,
+          shift.time_slot_code,
+          shift.classroom_id ?? null,
+          shift.classroom_name ?? null
+        ),
+        shift
+      )
     })
     return map
   })()
-  const toShiftKeyNormalized = (date: string, time_slot_code: string) => {
+  function toShiftKeyNormalized(date: string, time_slot_code: string) {
     try {
       const d = parseLocalDate(String(date).trim())
       const y = d.getFullYear()
@@ -1293,15 +1365,94 @@ export default function ContactSubPanel({
       return `${String(date).trim()}|${String(time_slot_code).trim()}`
     }
   }
+  function buildShiftKey(
+    date: string,
+    time_slot_code: string,
+    classroom_id?: string | null,
+    classroom_name?: string | null
+  ) {
+    const base = toShiftKeyNormalized(date, time_slot_code)
+    const classroomToken =
+      (typeof classroom_id === 'string' && classroom_id.trim().length > 0
+        ? classroom_id.trim()
+        : null) ||
+      (typeof classroom_name === 'string' && classroom_name.trim().length > 0
+        ? classroom_name.trim()
+        : null)
+    return classroomToken ? `${base}|${classroomToken}` : base
+  }
+  function buildShiftKeyVariants(
+    date: string,
+    time_slot_code: string,
+    classroom_id?: string | null,
+    classroom_name?: string | null
+  ) {
+    const variants = new Set<string>()
+    variants.add(toShiftKeyNormalized(date, time_slot_code))
+    if (classroom_id) variants.add(buildShiftKey(date, time_slot_code, classroom_id, null))
+    if (classroom_name) variants.add(buildShiftKey(date, time_slot_code, null, classroom_name))
+    return variants
+  }
+  function shiftKeyInSet(
+    keySet: Set<string>,
+    date: string,
+    time_slot_code: string,
+    classroom_id?: string | null,
+    classroom_name?: string | null
+  ) {
+    const baseKey = toShiftKeyNormalized(date, time_slot_code)
+    const variants = buildShiftKeyVariants(date, time_slot_code, classroom_id, classroom_name)
+    for (const key of variants) {
+      if (keySet.has(key)) return true
+    }
+    if (!classroom_id && !classroom_name) {
+      for (const key of keySet) {
+        if (key === baseKey || key.startsWith(`${baseKey}|`)) return true
+      }
+    }
+    return false
+  }
+  function shiftReasonFromMap(
+    reasonMap: Map<string, string>,
+    date: string,
+    time_slot_code: string,
+    classroom_id?: string | null,
+    classroom_name?: string | null
+  ) {
+    const baseKey = toShiftKeyNormalized(date, time_slot_code)
+    const variants = buildShiftKeyVariants(date, time_slot_code, classroom_id, classroom_name)
+    for (const key of variants) {
+      const value = reasonMap.get(key)
+      if (value) return value
+    }
+    if (!classroom_id && !classroom_name) {
+      for (const [key, value] of reasonMap.entries()) {
+        if (key === baseKey || key.startsWith(`${baseKey}|`)) return value
+      }
+    }
+    return undefined
+  }
   const canCoverShiftKeys = (() => {
-    return new Set(
-      (sub.can_cover || []).map(shift => toShiftKeyNormalized(shift.date, shift.time_slot_code))
-    )
+    const keys = new Set<string>()
+    ;(sub.can_cover || []).forEach(shift => {
+      buildShiftKeyVariants(
+        shift.date,
+        shift.time_slot_code,
+        shift.classroom_id,
+        shift.classroom_name
+      ).forEach(key => keys.add(key))
+    })
+    return keys
   })()
   const cannotCoverReasonByKey = (() => {
     const map = new Map<string, string>()
     ;(sub.cannot_cover || []).forEach(shift => {
-      map.set(`${shift.date}|${shift.time_slot_code}`, shift.reason)
+      buildShiftKeyVariants(
+        shift.date,
+        shift.time_slot_code,
+        shift.classroom_id,
+        shift.classroom_name
+      ).forEach(key => map.set(key, shift.reason))
     })
     return map
   })()
@@ -1311,6 +1462,7 @@ export default function ContactSubPanel({
       {
         date: string
         time_slot_code: string
+        classroom_id?: string | null
         classroom_name?: string | null
         class_name?: string | null
         classroom_color?: string | null
@@ -1329,14 +1481,28 @@ export default function ContactSubPanel({
     >()
 
     requestShiftDetails.forEach(shift => {
-      shiftMap.set(`${shift.date}|${shift.time_slot_code}`, shift)
+      shiftMap.set(
+        buildShiftKey(
+          shift.date,
+          shift.time_slot_code,
+          (shift as { classroom_id?: string | null }).classroom_id ?? null,
+          shift.classroom_name ?? null
+        ),
+        shift
+      )
     })
     ;(sub.can_cover || []).forEach(shift => {
-      const key = `${shift.date}|${shift.time_slot_code}`
+      const key = buildShiftKey(
+        shift.date,
+        shift.time_slot_code,
+        shift.classroom_id,
+        shift.classroom_name
+      )
       if (!shiftMap.has(key)) {
         shiftMap.set(key, {
           date: shift.date,
           time_slot_code: shift.time_slot_code,
+          classroom_id: shift.classroom_id ?? null,
           classroom_name: shift.classroom_name ?? null,
           class_name: shift.class_name ?? null,
           classroom_color: shift.classroom_color ?? null,
@@ -1345,22 +1511,36 @@ export default function ContactSubPanel({
       }
     })
     ;(sub.cannot_cover || []).forEach(shift => {
-      const key = `${shift.date}|${shift.time_slot_code}`
+      const key = buildShiftKey(
+        shift.date,
+        shift.time_slot_code,
+        shift.classroom_id,
+        shift.classroom_name
+      )
       if (!shiftMap.has(key)) {
         shiftMap.set(key, {
           date: shift.date,
           time_slot_code: shift.time_slot_code,
+          classroom_id: shift.classroom_id ?? null,
+          classroom_name: shift.classroom_name ?? null,
           status: 'uncovered',
         })
       }
     })
 
     assignedShifts.forEach(shift => {
-      const key = `${shift.date}|${shift.time_slot_code}`
+      const key = buildShiftKey(
+        shift.date,
+        shift.time_slot_code,
+        shift.classroom_id ?? null,
+        shift.classroom_name ?? null
+      )
       if (!shiftMap.has(key)) {
         shiftMap.set(key, {
           date: shift.date,
           time_slot_code: shift.time_slot_code,
+          classroom_id: shift.classroom_id ?? null,
+          classroom_name: shift.classroom_name ?? null,
           status: 'fully_covered',
           sub_name: sub.name,
           sub_id: sub.id,
@@ -1691,8 +1871,16 @@ export default function ContactSubPanel({
               )}
               <div className="grid grid-cols-1 sm:grid-cols-2 items-start gap-4">
                 {actionableShifts.map(shift => {
-                  const shiftKey = `${shift.date}|${shift.time_slot_code}`
-                  const shiftKeyNorm = toShiftKeyNormalized(shift.date, shift.time_slot_code)
+                  const shiftClassroomId =
+                    'classroom_id' in shift
+                      ? ((shift as { classroom_id?: string | null }).classroom_id ?? null)
+                      : null
+                  const shiftKey = buildShiftKey(
+                    shift.date,
+                    shift.time_slot_code,
+                    shiftClassroomId,
+                    shift.classroom_name ?? null
+                  )
                   const assignedToThisSub = assignedShiftByKey.get(shiftKey)
                   const assignedToThisSubFromShift = (shift.assigned_subs || []).find(
                     assignment => assignment.sub_id === sub.id
@@ -1743,15 +1931,20 @@ export default function ContactSubPanel({
                   const assignedElsewhere =
                     !isAssignedToThisSub && !isPartiallyByOther && Boolean(shift.sub_name)
                   const canCoverThisShift =
-                    (responseStatus === 'declined_all'
-                      ? false
-                      : canCoverShiftKeys.has(shiftKeyNorm)) || isAssignedToThisSub
+                    (responseStatus === 'declined_all' ? false : canCoverShiftKeys.has(shiftKey)) ||
+                    isAssignedToThisSub
                   const isOverridden = overriddenShiftIds.has(shiftKey)
                   const isSelected = selectedShifts.has(shiftKey)
                   const cannotCoverReason =
                     responseStatus === 'declined_all'
                       ? 'Declined this shift'
-                      : cannotCoverReasonByKey.get(shiftKey) ||
+                      : shiftReasonFromMap(
+                          cannotCoverReasonByKey,
+                          shift.date,
+                          shift.time_slot_code,
+                          shiftClassroomId,
+                          shift.classroom_name ?? null
+                        ) ||
                         (!canCoverThisShift && !isPartiallyByOther
                           ? 'Unavailable for this shift'
                           : null)
@@ -1912,6 +2105,7 @@ export default function ContactSubPanel({
                                     setChangeDialogShift({
                                       date: shift.date,
                                       time_slot_code: shift.time_slot_code,
+                                      classroom_id: shiftClassroomId,
                                       fromSubName: shift.sub_name || null,
                                       toSubName: sub.name,
                                     })

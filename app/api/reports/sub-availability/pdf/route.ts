@@ -13,6 +13,8 @@ import {
   truncateRichText,
 } from '@/lib/reports/rich-text'
 import { launchPdfBrowser } from '@/lib/reports/puppeteer-launch'
+import { runPdfStep, type PdfTraceStep } from '@/lib/reports/pdf-trace'
+import { configurePdfPageTimeouts, setPdfContentWithFallback } from '@/lib/reports/pdf-page'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -28,8 +30,11 @@ const parsePaperSize = (value: string | null): 'letter' | 'legal' =>
 const parseFooterNotesHtml = (value: string | null) =>
   truncateRichText(value, MAX_FOOTER_NOTES_HTML)
 const parseTopHeaderHtml = (value: string | null) => truncateRichText(value, MAX_TOP_HEADER_HTML)
+const parseDebugPdf = (value: string | null) => value === '1' || value === 'true'
 
 export async function GET(request: Request) {
+  const pdfTrace: PdfTraceStep[] = []
+  let debugPdf = false
   try {
     const schoolId = await getUserSchoolId()
     if (!schoolId) {
@@ -48,6 +53,7 @@ export async function GET(request: Request) {
     const paperSize = parsePaperSize(searchParams.get('paperSize'))
     const footerNotesHtml = parseFooterNotesHtml(searchParams.get('footerNotesHtml'))
     const topHeaderHtml = parseTopHeaderHtml(searchParams.get('topHeaderHtml'))
+    debugPdf = parseDebugPdf(searchParams.get('debugPdf'))
 
     const { timeZone, days, timeSlots, classGroups, subs, availabilityRows, preferences } =
       await getSubAvailabilityReportData(schoolId)
@@ -74,36 +80,50 @@ export async function GET(request: Request) {
       paperSize,
     })
 
-    const browser = await launchPdfBrowser()
-    const page = await browser.newPage()
-    await page.setContent(html, { waitUntil: 'networkidle0' })
-    const pdf = await page.pdf({
-      format: paperSize,
-      landscape: true,
-      printBackground: true,
-      margin: {
-        top: '0.2in',
-        right: '0.2in',
-        bottom: '0.2in',
-        left: '0.2in',
-      },
-    })
-    await browser.close()
+    const browser = await runPdfStep(pdfTrace, 'launch', () => launchPdfBrowser(), 180000)
+    try {
+      const page = await runPdfStep(pdfTrace, 'newPage', () => browser.newPage(), 60000)
+      configurePdfPageTimeouts(page)
+      await runPdfStep(pdfTrace, 'setContent', () => setPdfContentWithFallback(page, html), 60000)
+      const pdf = await runPdfStep(
+        pdfTrace,
+        'pdf',
+        () =>
+          page.pdf({
+            format: paperSize,
+            landscape: true,
+            printBackground: true,
+            timeout: 0,
+            margin: {
+              top: '0.2in',
+              right: '0.2in',
+              bottom: '0.2in',
+              left: '0.2in',
+            },
+          }),
+        120000
+      )
 
-    const pdfBytes = new Uint8Array(pdf)
-    return new NextResponse(pdfBytes, {
-      headers: {
-        'Content-Type': 'application/pdf',
-        'Content-Disposition': `inline; filename="${buildSubAvailabilityFilename(now)}"`,
-      },
-    })
+      const pdfBytes = new Uint8Array(pdf)
+      return new NextResponse(pdfBytes, {
+        headers: {
+          'Content-Type': 'application/pdf',
+          'Content-Disposition': `inline; filename="${buildSubAvailabilityFilename(now)}"`,
+        },
+      })
+    } finally {
+      await browser.close()
+    }
   } catch (error: any) {
-    console.error('Error generating sub availability PDF:', error)
-    return NextResponse.json(
-      {
-        error: error?.message || 'Failed to generate sub availability PDF.',
-      },
-      { status: 500 }
-    )
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Error generating sub availability PDF:', error)
+    }
+    const payload: Record<string, unknown> = {
+      error: error?.message || 'Failed to generate sub availability PDF.',
+    }
+    if (debugPdf) {
+      payload.pdf_trace = pdfTrace
+    }
+    return NextResponse.json(payload, { status: 500 })
   }
 }

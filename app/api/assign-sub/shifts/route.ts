@@ -65,6 +65,7 @@ export async function POST(request: NextRequest) {
       ),
     ]
     const shiftMapByRequest = new Map<string, Map<string, string>>()
+    const simpleShiftCandidatesByRequest = new Map<string, Map<string, Set<string>>>()
     if (timeOffRequestIds.length > 0) {
       const { data: torRows } = await supabase
         .from('time_off_requests')
@@ -97,14 +98,28 @@ export async function POST(request: NextRequest) {
           if (!torId) continue
           const code = (row.time_slots as { code?: string } | null)?.code ?? ''
           const dateStr = toDateStringISO(row.date)
+          const keyFullBySlotId = `${dateStr}|${row.time_slot_id ?? ''}|${row.classroom_id ?? ''}`
+          const keySimpleBySlotId = `${dateStr}|${row.time_slot_id ?? ''}`
           const keyFull = `${dateStr}|${code}|${row.classroom_id ?? ''}`
           const keySimple = `${dateStr}|${code}`
           if (!shiftMapByRequest.has(torId)) {
             shiftMapByRequest.set(torId, new Map())
           }
+          if (!simpleShiftCandidatesByRequest.has(torId)) {
+            simpleShiftCandidatesByRequest.set(torId, new Map())
+          }
           const map = shiftMapByRequest.get(torId)!
+          const simpleMap = simpleShiftCandidatesByRequest.get(torId)!
+          map.set(keyFullBySlotId, row.id)
           map.set(keyFull, row.id)
-          if (!map.has(keySimple)) map.set(keySimple, row.id)
+
+          const bySlotIdSet = simpleMap.get(keySimpleBySlotId) ?? new Set<string>()
+          bySlotIdSet.add(row.id)
+          simpleMap.set(keySimpleBySlotId, bySlotIdSet)
+
+          const bySlotCodeSet = simpleMap.get(keySimple) ?? new Set<string>()
+          bySlotCodeSet.add(row.id)
+          simpleMap.set(keySimple, bySlotCodeSet)
         }
       }
     }
@@ -238,6 +253,8 @@ export async function POST(request: NextRequest) {
         school_closure: isSlotClosedOnDate(shift.date, shift.time_slot_id, closureList),
       }
       const dateStr = toDateStringISO(shift.date)
+      const keyFullBySlotId = `${dateStr}|${shift.time_slot_id}|${shift.classroom_id ?? ''}`
+      const keySimpleBySlotId = `${dateStr}|${shift.time_slot_id}`
       const keyFull = `${dateStr}|${shift.time_slot_code ?? ''}|${shift.classroom_id ?? ''}`
       const keySimple = `${dateStr}|${shift.time_slot_code ?? ''}`
       let coverage_request_shift_id: string | null = null
@@ -246,21 +263,46 @@ export async function POST(request: NextRequest) {
         coverage_request_shift_id = fromAssignment
       } else if (shift.time_off_request_id) {
         const map = shiftMapByRequest.get(shift.time_off_request_id)
-        const fromFull = map?.get(keyFull)
-        const fromSimple = map?.get(keySimple)
-        if (!fromFull && fromSimple && keyFull !== keySimple) {
-          console.warn(
-            '[assign-sub/shifts] Used keySimple fallback for coverage_request_shift lookup',
-            {
+        const simpleCandidates = simpleShiftCandidatesByRequest.get(shift.time_off_request_id)
+        const fromExact = map?.get(keyFullBySlotId) ?? map?.get(keyFull) ?? null
+
+        if (fromExact) {
+          coverage_request_shift_id = fromExact
+        } else {
+          const simpleCandidatesBySlotId = simpleCandidates?.get(keySimpleBySlotId) ?? new Set()
+          const simpleCandidatesBySlotCode = simpleCandidates?.get(keySimple) ?? new Set()
+          const uniqueSimpleBySlotId =
+            simpleCandidatesBySlotId.size === 1 ? Array.from(simpleCandidatesBySlotId)[0] : null
+          const uniqueSimpleBySlotCode =
+            simpleCandidatesBySlotCode.size === 1 ? Array.from(simpleCandidatesBySlotCode)[0] : null
+
+          const fromSimple = uniqueSimpleBySlotId ?? uniqueSimpleBySlotCode ?? null
+          if (fromSimple) {
+            console.warn('[assign-sub/shifts] Used unique keySimple fallback for lookup', {
               teacher_id,
               date: dateStr,
+              keyFullBySlotId,
               keyFull,
+              keySimpleBySlotId,
               keySimple,
               time_off_request_id: shift.time_off_request_id,
-            }
-          )
+            })
+            coverage_request_shift_id = fromSimple
+          } else if (simpleCandidatesBySlotId.size > 1 || simpleCandidatesBySlotCode.size > 1) {
+            console.warn(
+              '[assign-sub/shifts] Ambiguous keySimple fallback; refusing to auto-resolve coverage_request_shift_id',
+              {
+                teacher_id,
+                date: dateStr,
+                keySimpleBySlotId,
+                keySimple,
+                time_off_request_id: shift.time_off_request_id,
+                simple_slot_id_candidates: Array.from(simpleCandidatesBySlotId),
+                simple_slot_code_candidates: Array.from(simpleCandidatesBySlotCode),
+              }
+            )
+          }
         }
-        coverage_request_shift_id = (fromFull ?? fromSimple ?? null) || null
       }
       const slotClassKey = `${dateStr}|${shift.time_slot_id}|${shift.classroom_id ?? ''}`
       const assignmentList =

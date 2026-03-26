@@ -6,6 +6,7 @@ import {
   getYoungestRatioGroup,
 } from '@/lib/reports/daily-schedule-metrics'
 import { sanitizeRichTextHtml } from '@/lib/reports/rich-text'
+import { adminRoleColorValues } from '@/lib/utils/colors'
 import { formatDateISOInTimeZone } from '@/lib/utils/date'
 import { getSlotClosureOnDate } from '@/lib/utils/school-closures'
 
@@ -152,6 +153,7 @@ export function buildDailySchedulePdfHtml({
   })
   const color = {
     permanent: '#0F172A',
+    admin: options.colorFriendly ? adminRoleColorValues.text : '#334155',
     floater: options.colorFriendly ? '#7E22CE' : '#334155',
     flex: options.colorFriendly ? '#1E40AF' : '#334155',
     tempCoverage: options.colorFriendly ? '#BE185D' : '#334155',
@@ -237,7 +239,17 @@ export function buildDailySchedulePdfHtml({
                     a =>
                       !a.is_substitute &&
                       !a.is_floater &&
+                      !a.is_admin &&
                       !a.is_flexible &&
+                      !absentTeacherIds.has(a.teacher_id)
+                  )
+                  .sort(sortByName)
+                const adminTeachers = assignments
+                  .filter(
+                    a =>
+                      !a.is_substitute &&
+                      !a.is_floater &&
+                      a.is_admin &&
                       !absentTeacherIds.has(a.teacher_id)
                   )
                   .sort(sortByName)
@@ -286,6 +298,24 @@ export function buildDailySchedulePdfHtml({
                       )
                     )}${breakStr}</div>`
                   })
+                  .join('')
+                const adminLines = adminTeachers
+                  .map(
+                    t =>
+                      `<div style="color:${color.admin}; font-size:10px; font-weight:500; line-height:1.2; margin-bottom:1px;">${escapeHtml(
+                        options.colorFriendly ? '' : '▣ '
+                      )}${escapeHtml(
+                        formatTeacherName(
+                          {
+                            teacher_name: t.teacher_name,
+                            teacher_first_name: t.teacher_first_name,
+                            teacher_last_name: t.teacher_last_name,
+                            teacher_display_name: t.teacher_display_name,
+                          },
+                          options.teacherNameFormat
+                        )
+                      )}</div>`
+                  )
                   .join('')
                 const floaterLines = floaters
                   .map(
@@ -422,6 +452,7 @@ export function buildDailySchedulePdfHtml({
                 )
                 const hasTeacherContent = Boolean(
                   teacherLines ||
+                  adminLines ||
                   floaterLines ||
                   flexLines ||
                   temporaryCoverageLines ||
@@ -442,6 +473,7 @@ export function buildDailySchedulePdfHtml({
               <div style="display:flex; flex-direction:column; gap:0;">
                 ${metricsBlock}
                 ${teacherLines}
+                ${adminLines}
                 ${floaterLines}
                 ${flexLines}
                 ${temporaryCoverageLines}
@@ -529,6 +561,7 @@ export function buildDailySchedulePdfHtml({
                   }</div>
                   <div style="color:${color.sub};">↳ Sub</div>
                   <div style="color:${color.absent}; text-decoration: line-through;">Absent</div>
+                  <div style="color:${color.admin};">${options.colorFriendly ? 'Admin' : '▣ Admin'}</div>
                   <div style="color:#475569;"><span style="text-decoration: line-through;">Reassigned</span> *</div>
                   ${
                     options.showRequiredRatios && options.showPreferredRatios

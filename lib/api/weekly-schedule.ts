@@ -366,6 +366,7 @@ export interface WeeklyScheduleData {
     teacher_last_name?: string | null
     teacher_display_name?: string | null
     is_flexible?: boolean
+    is_admin?: boolean
     staffing_event_id?: string
     event_category?: 'standard' | 'break' | 'reassignment' | null
     break_start_time?: string | null
@@ -1102,6 +1103,7 @@ export async function getScheduleSnapshotData({
               is_flexible: Boolean(
                 roleCodesByTeacherId.get(assignment.teacher_id)?.has('FLEXIBLE')
               ),
+              is_admin: Boolean(roleCodesByTeacherId.get(assignment.teacher_id)?.has('ADMIN')),
               classroom_id: assignment.classroom_id,
               classroom_name: assignment.classroom?.name || 'Unknown',
               is_floater: effectiveIsFloater,

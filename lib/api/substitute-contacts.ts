@@ -30,6 +30,8 @@ export interface AssignedShift {
   date: string
   day_name: string
   time_slot_code: string
+  classroom_id?: string | null
+  classroom_name?: string | null
 }
 
 export interface SubstituteContactWithDetails extends SubstituteContact {
@@ -74,6 +76,8 @@ interface CoverageShift {
   id: string
   date: string
   time_slot_id: string
+  classroom_id?: string | null
+  classroom_name?: string | null
   time_slots?: { code: string | null } | null
   days_of_week?: { name: string | null } | null
 }
@@ -82,6 +86,8 @@ type CoverageShiftRow = {
   id: string
   date: string
   time_slot_id: string
+  classroom_id?: string | null
+  classrooms?: Array<{ name: string | null }> | { name: string | null } | null
   time_slots: Array<{ code: string | null }> | { code: string | null } | null
   days_of_week: Array<{ name: string | null }> | { name: string | null } | null
 }
@@ -207,7 +213,7 @@ export async function getSubstituteContact(
     // First, get all sub_assignments for this sub and teacher
     const { data: subAssignments } = await supabase
       .from('sub_assignments')
-      .select('date, time_slot_id')
+      .select('date, time_slot_id, classroom_id')
       .eq('sub_id', subId)
       .eq('teacher_id', teacherId)
 
@@ -220,6 +226,8 @@ export async function getSubstituteContact(
           id,
           date,
           time_slot_id,
+          classroom_id,
+          classrooms:classroom_id(name),
           time_slots:time_slots(code),
           days_of_week:day_of_week_id(name)
         `
@@ -227,15 +235,27 @@ export async function getSubstituteContact(
         .eq('coverage_request_id', coverageRequestId)
 
       if (coverageShifts) {
-        // Create a map of (date, time_slot_id) -> coverage_request_shift for quick lookup
-        const shiftMap = new Map<string, CoverageShift>()
+        // Exact map includes classroom for floater same-slot scenarios.
+        const exactShiftMap = new Map<string, CoverageShift>()
+        // Simple map is kept as fallback for legacy rows with no classroom.
+        const simpleShiftMap = new Map<string, CoverageShift>()
         coverageShifts.forEach((shift: CoverageShiftRow) => {
-          const key = `${shift.date}|${shift.time_slot_id}`
+          const exactKey = `${shift.date}|${shift.time_slot_id}|${shift.classroom_id ?? ''}`
+          const simpleKey = `${shift.date}|${shift.time_slot_id}`
           // Transform the data to match CoverageShift interface
           const transformedShift: CoverageShift = {
             id: shift.id,
             date: shift.date,
             time_slot_id: shift.time_slot_id,
+            classroom_id: shift.classroom_id ?? null,
+            classroom_name:
+              Array.isArray(shift.classrooms) && shift.classrooms.length > 0
+                ? (shift.classrooms[0]?.name ?? null)
+                : shift.classrooms &&
+                    typeof shift.classrooms === 'object' &&
+                    !Array.isArray(shift.classrooms)
+                  ? (shift.classrooms.name ?? null)
+                  : null,
             time_slots:
               Array.isArray(shift.time_slots) && shift.time_slots.length > 0
                 ? { code: shift.time_slots[0]?.code ?? null }
@@ -245,14 +265,18 @@ export async function getSubstituteContact(
                 ? { name: shift.days_of_week[0]?.name ?? null }
                 : null,
           }
-          shiftMap.set(key, transformedShift)
+          exactShiftMap.set(exactKey, transformedShift)
+          if (!simpleShiftMap.has(simpleKey)) {
+            simpleShiftMap.set(simpleKey, transformedShift)
+          }
         })
 
         // Match sub_assignments with coverage_request_shifts
         assignedShifts = subAssignments
           .map(assignment => {
-            const key = `${assignment.date}|${assignment.time_slot_id}`
-            return shiftMap.get(key)
+            const exactKey = `${assignment.date}|${assignment.time_slot_id}|${assignment.classroom_id ?? ''}`
+            const simpleKey = `${assignment.date}|${assignment.time_slot_id}`
+            return exactShiftMap.get(exactKey) ?? simpleShiftMap.get(simpleKey)
           })
           .filter((shift): shift is CoverageShift => Boolean(shift))
           .map(shift => ({
@@ -260,6 +284,8 @@ export async function getSubstituteContact(
             date: shift.date,
             day_name: shift.days_of_week?.name || '',
             time_slot_code: shift.time_slots?.code || '',
+            classroom_id: shift.classroom_id ?? null,
+            classroom_name: shift.classroom_name ?? null,
           }))
       }
     }
@@ -272,7 +298,9 @@ export async function getSubstituteContact(
     const shift = override.shift
     const timeSlotCode = shift?.time_slots?.code || ''
     if (!shift?.date || !timeSlotCode) return
-    const key = `${shift.date}|${timeSlotCode}`
+    const key = shift.classroom_id
+      ? `${shift.date}|${timeSlotCode}|${shift.classroom_id}`
+      : `${shift.date}|${timeSlotCode}`
     if (override.selected) {
       selectedShiftKeys.add(key)
     }

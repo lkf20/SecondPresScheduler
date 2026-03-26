@@ -14,6 +14,7 @@ import { isSlotClosedOnDate } from '@/lib/utils/school-closures'
 import { getShiftKey } from '@/lib/sub-finder/shift-helpers'
 
 interface Shift {
+  coverage_request_shift_id?: string | null
   date: string
   day_of_week_id: string
   day_name: string
@@ -304,8 +305,9 @@ export async function POST(request: NextRequest) {
         s.time_slot_id &&
         !isSlotClosedOnDate(toDateStringISO(s.date), s.time_slot_id, closureList)
     )
-    const useRoomLevelShifts =
-      coverageShiftsFiltered.length > 0 && coverageShiftsFiltered.some((s: any) => s.classroom_id)
+    // Prefer row-level coverage_request_shifts whenever present. This preserves one-row-per-shift
+    // semantics even for legacy rows where classroom_id may be null.
+    const useRoomLevelShifts = coverageShiftsFiltered.length > 0
 
     let shiftsToCover: Shift[]
     if (useRoomLevelShifts) {
@@ -318,7 +320,22 @@ export async function POST(request: NextRequest) {
           })
       shiftsToCover = filteredByDate.map((shift: any) => {
         const classGroup = shift.class_groups
+        const scheduleKey = `${shift.day_of_week_id}|${shift.time_slot_id}`
+        const scheduleEntry = scheduleLookup.get(scheduleKey)
+        const classroomRel = Array.isArray(shift.classroom) ? shift.classroom[0] : shift.classroom
+        const fallbackClassrooms = scheduleEntry?.classrooms?.size
+          ? Array.from(scheduleEntry.classrooms)
+          : []
+        const fallbackClassroomName = fallbackClassrooms.length === 1 ? fallbackClassrooms[0] : null
+        const resolvedClassroomName = classroomRel?.name ?? fallbackClassroomName ?? null
+        const resolvedClassroomColor =
+          classroomRel?.color ??
+          (resolvedClassroomName ? classroomColorMap.get(resolvedClassroomName) || null : null)
+        const resolvedClassGroupName =
+          classGroup?.name ||
+          (scheduleEntry?.classes?.size ? Array.from(scheduleEntry.classes).join(', ') : null)
         return {
+          coverage_request_shift_id: shift.id ?? null,
           date: toDateStringISO(shift.date),
           day_of_week_id: shift.day_of_week_id,
           day_name: shift.day_of_week?.name || '',
@@ -326,11 +343,11 @@ export async function POST(request: NextRequest) {
           time_slot_code: shift.time_slots?.code || '',
           class_group_id: shift.class_group_id ?? null,
           classroom_id: shift.classroom_id ?? null,
-          classroom_name: shift.classroom?.name ?? null,
-          classroom_color: shift.classroom?.color ?? null,
+          classroom_name: resolvedClassroomName,
+          classroom_color: resolvedClassroomColor,
           diaper_changing_required: classGroup?.diaper_changing_required ?? false,
           lifting_children_required: classGroup?.lifting_children_required ?? false,
-          class_group_name: classGroup?.name || null,
+          class_group_name: resolvedClassGroupName,
         }
       })
     } else {
@@ -751,7 +768,8 @@ export async function POST(request: NextRequest) {
 
               // Get coverage_request_shift_id from map
               const shiftKey = `${shift.date}|${shift.time_slot_code}|${shift.classroom_id || ''}`
-              const coverageRequestShiftId = shiftIdMap.get(shiftKey)
+              const coverageRequestShiftId =
+                shift.coverage_request_shift_id || shiftIdMap.get(shiftKey)
 
               cannotCover.push({
                 date: shift.date,

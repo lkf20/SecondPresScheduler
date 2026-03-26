@@ -96,9 +96,9 @@ export const coverageColorValues = {
  */
 /** Staff list / legends: Admin role (office staff), distinct from Permanent/Flex blues */
 export const adminRoleColorValues = {
-  bg: 'rgb(245, 243, 255)', // violet-50
-  border: 'rgb(167, 139, 250)', // violet-400
-  text: 'rgb(109, 40, 217)', // violet-700
+  bg: 'rgb(240, 253, 244)', // green-50
+  border: 'rgb(22, 101, 52)', // green-800
+  text: 'rgb(21, 128, 61)', // green-700
 } as const
 
 export const contactStatusColorValues = {

@@ -1,4 +1,5 @@
 import { buildDailySchedulePdfHtml } from '@/lib/reports/daily-schedule-pdf'
+import { adminRoleColorValues } from '@/lib/utils/colors'
 
 describe('daily schedule pdf html', () => {
   const baseData = [
@@ -562,5 +563,115 @@ describe('daily schedule pdf html', () => {
       'color:#475569;"><span style="text-decoration: line-through;">Reassigned</span> *</div>'
     )
     expect(html).toContain('text-decoration: line-through;">Jenn S.</span> *</span>')
+  })
+
+  it('renders Admin legend and admin teacher rows in admin color', () => {
+    const dataWithAdmin = [
+      {
+        ...baseData[0],
+        days: [
+          {
+            ...baseData[0].days[0],
+            time_slots: [
+              {
+                ...baseData[0].days[0].time_slots[0],
+                assignments: [
+                  {
+                    id: 'admin-assignment-1',
+                    teacher_id: 'admin-1',
+                    teacher_name: 'Admin User',
+                    teacher_first_name: 'Admin',
+                    teacher_last_name: 'User',
+                    teacher_display_name: 'Admin User',
+                    is_substitute: false,
+                    is_floater: false,
+                    is_flexible: false,
+                    is_admin: true,
+                    classroom_id: 'classroom-1',
+                    classroom_name: 'Infant Room',
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ] as any
+
+    const html = buildDailySchedulePdfHtml({
+      dateISO: '2026-03-09',
+      generatedAt: 'Mar 9, 2026, 9:00 AM',
+      data: dataWithAdmin,
+      options: {
+        showAbsencesAndSubs: true,
+        showEnrollment: false,
+        showPreferredRatios: false,
+        showRequiredRatios: false,
+        colorFriendly: true,
+        layout: 'one',
+        teacherNameFormat: 'default',
+      },
+      timeZone: 'America/New_York',
+      schoolClosures: [],
+    })
+
+    expect(html).toContain(`style="color:${adminRoleColorValues.text};">Admin</div>`)
+    expect(html).toContain(
+      `style="color:${adminRoleColorValues.text}; font-size:10px; font-weight:500; line-height:1.2; margin-bottom:1px;">Admin User</div>`
+    )
+  })
+
+  it('shows admin symbol in black-and-white mode for legend and rows', () => {
+    const dataWithAdmin = [
+      {
+        ...baseData[0],
+        days: [
+          {
+            ...baseData[0].days[0],
+            time_slots: [
+              {
+                ...baseData[0].days[0].time_slots[0],
+                assignments: [
+                  {
+                    id: 'admin-assignment-1',
+                    teacher_id: 'admin-1',
+                    teacher_name: 'Admin User',
+                    teacher_first_name: 'Admin',
+                    teacher_last_name: 'User',
+                    teacher_display_name: 'Admin User',
+                    is_substitute: false,
+                    is_floater: false,
+                    is_flexible: false,
+                    is_admin: true,
+                    classroom_id: 'classroom-1',
+                    classroom_name: 'Infant Room',
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ] as any
+
+    const html = buildDailySchedulePdfHtml({
+      dateISO: '2026-03-09',
+      generatedAt: 'Mar 9, 2026, 9:00 AM',
+      data: dataWithAdmin,
+      options: {
+        showAbsencesAndSubs: true,
+        showEnrollment: false,
+        showPreferredRatios: false,
+        showRequiredRatios: false,
+        colorFriendly: false,
+        layout: 'one',
+        teacherNameFormat: 'default',
+      },
+      timeZone: 'America/New_York',
+      schoolClosures: [],
+    })
+
+    expect(html).toContain('>▣ Admin</div>')
+    expect(html).toContain('>▣ Admin User</div>')
   })
 })

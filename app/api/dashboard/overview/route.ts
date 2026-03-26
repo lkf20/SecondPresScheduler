@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getUserSchoolId } from '@/lib/utils/auth'
 import { createErrorResponse } from '@/lib/utils/errors'
-import { parseLocalDate, expandDateRangeWithTimeZone } from '@/lib/utils/date'
+import { parseLocalDate, expandDateRangeWithTimeZone, toDateStringISO } from '@/lib/utils/date'
 import { getDefaultLastDayOfSchool, getStaffingEndDate } from '@/lib/dashboard/staffing-boundary'
 import { getCalendarSettings, getSchoolClosuresForDateRange } from '@/lib/api/school-calendar'
 import { MONTH_NAMES } from '@/lib/utils/date-format'
@@ -453,9 +453,18 @@ export async function GET(request: NextRequest) {
         const notes = timeOffRequest?.notes || null
 
         // Get shifts for this request, excluding shifts on school closed days (e.g. snow day added after request was created)
+        // Defensive: clamp to the request's own date range so stale/legacy shifts
+        // outside [start_date, end_date] do not leak into Dashboard counts/cards.
+        const requestStartDate = toDateStringISO(request.start_date)
+        const requestEndDate = toDateStringISO(request.end_date || request.start_date)
+
         // Sort by date, then day display_order, then time_slot display_order (match settings order per AGENTS.md)
         const requestShiftsRaw = coverageRequestShifts
           .filter((s: any) => s.coverage_request_id === request.id)
+          .filter((s: any) => {
+            const shiftDate = toDateStringISO(s.date)
+            return shiftDate >= requestStartDate && shiftDate <= requestEndDate
+          })
           .filter((s: any) => !isSlotClosedOnDate(s.date, s.time_slot_id, closureListForCoverage))
         const requestShifts = [...requestShiftsRaw].sort((a: any, b: any) => {
           if (a.date !== b.date) return a.date < b.date ? -1 : 1

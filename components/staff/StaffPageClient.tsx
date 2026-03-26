@@ -22,6 +22,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import DataTable, { Column } from '@/components/shared/DataTable'
 import ErrorMessage from '@/components/shared/ErrorMessage'
 import ActiveStatusChip from '@/components/settings/ActiveStatusChip'
+import StaffChip from '@/components/ui/staff-chip'
 import type { StaffWithRole } from '@/lib/api/staff'
 import {
   buildDuplicateDisplayNameMap,
@@ -32,7 +33,6 @@ import {
 import { formatUSPhone } from '@/lib/utils/phone'
 import { useSchool } from '@/lib/contexts/SchoolContext'
 import { invalidateSchedulingSurfaces } from '@/lib/utils/invalidation'
-import { adminRoleColorValues } from '@/lib/utils/colors'
 
 interface StaffPageClientProps {
   staff: StaffWithRole[]
@@ -422,19 +422,7 @@ export default function StaffPageClient({
                 )
               }
               if (label === 'Admin') {
-                return (
-                  <span
-                    key={label}
-                    className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border"
-                    style={{
-                      backgroundColor: adminRoleColorValues.bg,
-                      borderColor: adminRoleColorValues.border,
-                      color: adminRoleColorValues.text,
-                    }}
-                  >
-                    {label}
-                  </span>
-                )
+                return <StaffChip key={label} name={label} variant="admin" navigable={false} />
               }
               return (
                 <span

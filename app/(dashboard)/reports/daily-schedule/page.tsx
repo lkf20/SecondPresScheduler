@@ -17,7 +17,7 @@ import {
 } from '@/lib/reports/daily-schedule-metrics'
 import { hasRichTextContent, sanitizeRichTextHtml } from '@/lib/reports/rich-text'
 import { useReportDefaults } from '@/lib/hooks/use-report-defaults'
-import { getHeaderClasses } from '@/lib/utils/colors'
+import { adminRoleColorValues, getHeaderClasses } from '@/lib/utils/colors'
 import { getSlotClosureOnDate } from '@/lib/utils/school-closures'
 import { cn } from '@/lib/utils'
 import type { WeeklyScheduleDataByClassroom } from '@/lib/api/weekly-schedule'
@@ -697,6 +697,16 @@ export default function DailyScheduleReportPage() {
                 </span>
               </div>
               <div className="flex items-center gap-2">
+                {!displayColorFriendly && <span className="text-slate-600">▣</span>}
+                <span
+                  style={{
+                    color: displayColorFriendly ? adminRoleColorValues.text : '#475569',
+                  }}
+                >
+                  Admin
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
                 <span className={cn(displayColorFriendly ? 'text-slate-600' : 'text-slate-700')}>
                   <span className="line-through">Reassigned</span> *
                 </span>
@@ -891,7 +901,17 @@ export default function DailyScheduleReportPage() {
                                     !a.is_substitute &&
                                     !a.is_floater &&
                                     !absentTeacherIds.has(a.teacher_id) &&
+                                    !a.is_admin &&
                                     !a.is_flexible
+                                )
+                                .sort(sortByName)
+                              const adminTeachers = assignments
+                                .filter(
+                                  a =>
+                                    !a.is_substitute &&
+                                    !a.is_floater &&
+                                    !absentTeacherIds.has(a.teacher_id) &&
+                                    a.is_admin
                                 )
                                 .sort(sortByName)
                               const flexTeachers = assignments
@@ -941,6 +961,37 @@ export default function DailyScheduleReportPage() {
                                       teacher_display_name: teacher.teacher_display_name,
                                     },
                                     teacherNameFormat
+                                  ),
+                                })
+                              })
+
+                              adminTeachers.forEach(adminTeacher => {
+                                teacherRows.push({
+                                  key: `admin-${adminTeacher.id}`,
+                                  className: displayColorFriendly ? '' : 'text-slate-700',
+                                  content: (
+                                    <span className="inline-flex items-center gap-1">
+                                      {!displayColorFriendly && (
+                                        <span className="text-slate-500">▣</span>
+                                      )}
+                                      <span
+                                        style={{
+                                          color: displayColorFriendly
+                                            ? adminRoleColorValues.text
+                                            : undefined,
+                                        }}
+                                      >
+                                        {formatTeacherName(
+                                          {
+                                            teacher_name: adminTeacher.teacher_name,
+                                            teacher_first_name: adminTeacher.teacher_first_name,
+                                            teacher_last_name: adminTeacher.teacher_last_name,
+                                            teacher_display_name: adminTeacher.teacher_display_name,
+                                          },
+                                          teacherNameFormat
+                                        )}
+                                      </span>
+                                    </span>
                                   ),
                                 })
                               })
