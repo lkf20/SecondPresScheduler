@@ -14,8 +14,8 @@ import {
 } from '@/lib/reports/rich-text'
 import { filterActiveDailyScheduleData, resolveDailyScheduleDay } from '@/lib/api/daily-schedule'
 import { launchPdfBrowser } from '@/lib/reports/puppeteer-launch'
-import { runPdfStep, type PdfTraceStep } from '@/lib/reports/pdf-trace'
 import { configurePdfPageTimeouts, setPdfContentWithFallback } from '@/lib/reports/pdf-page'
+import { runPdfStep, type PdfTraceStep } from '@/lib/reports/pdf-trace'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
