@@ -198,6 +198,46 @@ describe('GET /api/reports/sub-availability/pdf', () => {
     expect(json.error).toMatch(/failed/i)
   })
 
+  it('falls back to domcontentloaded when networkidle0 times out', async () => {
+    ;(createClient as jest.Mock).mockResolvedValue(
+      makeSupabaseMock({
+        days_of_week: [{ id: 'day-mon', name: 'Mon', display_order: 1 }],
+        time_slots: [
+          {
+            id: 'slot-am',
+            code: 'AM',
+            name: 'Morning',
+            display_order: 1,
+            school_id: 'school-1',
+            is_active: true,
+          },
+        ],
+        class_groups: [],
+        staff: [],
+        sub_availability: [],
+        sub_class_preferences: [],
+      })
+    )
+    setContentMock
+      .mockRejectedValueOnce(new Error('Timed out after waiting 30000ms'))
+      .mockResolvedValueOnce(undefined)
+
+    const response = await GET(request)
+
+    expect(response.status).toBe(200)
+    expect(setContentMock).toHaveBeenCalledTimes(2)
+    expect(setContentMock).toHaveBeenNthCalledWith(
+      1,
+      expect.any(String),
+      expect.objectContaining({ waitUntil: 'networkidle0' })
+    )
+    expect(setContentMock).toHaveBeenNthCalledWith(
+      2,
+      expect.any(String),
+      expect.objectContaining({ waitUntil: 'domcontentloaded' })
+    )
+  })
+
   it('returns success with empty dataset', async () => {
     ;(createClient as jest.Mock).mockResolvedValue(
       makeSupabaseMock({
