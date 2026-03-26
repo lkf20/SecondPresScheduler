@@ -122,4 +122,27 @@ describe('GET /api/reports/daily-schedule/pdf', () => {
     expect(response.status).toBe(500)
     expect(json.error).toMatch(/failed/i)
   })
+
+  it('falls back to domcontentloaded when networkidle0 times out', async () => {
+    setContentMock
+      .mockRejectedValueOnce(new Error('Timed out after waiting 30000ms'))
+      .mockResolvedValueOnce(undefined)
+
+    const response = await GET(
+      new Request('http://localhost/api/reports/daily-schedule/pdf?date=2026-03-09')
+    )
+
+    expect(response.status).toBe(200)
+    expect(setContentMock).toHaveBeenCalledTimes(2)
+    expect(setContentMock).toHaveBeenNthCalledWith(
+      1,
+      '<html><body>PDF</body></html>',
+      expect.objectContaining({ waitUntil: 'networkidle0' })
+    )
+    expect(setContentMock).toHaveBeenNthCalledWith(
+      2,
+      '<html><body>PDF</body></html>',
+      expect.objectContaining({ waitUntil: 'domcontentloaded' })
+    )
+  })
 })
