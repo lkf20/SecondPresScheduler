@@ -57,7 +57,7 @@ BEGIN
   FOR r IN
     SELECT DISTINCT ON (ts.classroom_id)
       ts.classroom_id AS cid,
-      ts.class_group_id AS cgid
+      NULLIF(to_jsonb(ts)->>'class_group_id', '')::uuid AS cgid
     FROM teacher_schedules ts
     JOIN time_off_requests tor ON ts.teacher_id = tor.teacher_id
     WHERE tor.id = NEW.time_off_request_id
@@ -65,7 +65,7 @@ BEGIN
       AND ts.time_slot_id = NEW.time_slot_id
       AND ts.school_id = v_school_id
       AND ts.classroom_id IS NOT NULL
-    ORDER BY ts.classroom_id, ts.class_group_id NULLS LAST
+    ORDER BY ts.classroom_id, NULLIF(to_jsonb(ts)->>'class_group_id', '')::uuid NULLS LAST
   LOOP
     v_idx := v_idx + 1;
 
@@ -243,7 +243,7 @@ SELECT
   tos.day_of_week_id,
   tos.time_slot_id,
   ts.classroom_id,
-  ts.class_group_id,
+  NULLIF(to_jsonb(ts)->>'class_group_id', '')::uuid AS class_group_id,
   COALESCE(tos.is_partial, false),
   tos.start_time,
   tos.end_time,

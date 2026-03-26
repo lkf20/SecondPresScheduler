@@ -3588,7 +3588,9 @@ export default function SubFinderPage() {
             onChangeShift={shift => {
               const match = selectedAbsence.shifts.shift_details.find(
                 detail =>
-                  detail.date === shift.date && detail.time_slot_code === shift.time_slot_code
+                  detail.date === shift.date &&
+                  detail.time_slot_code === shift.time_slot_code &&
+                  (!shift.classroom_id || (detail.classroom_id ?? null) === shift.classroom_id)
               )
               if (match) {
                 handleSelectShift(match)

@@ -247,7 +247,7 @@ describe('POST /api/assign-sub/shifts', () => {
     expect(shift.assigned_sub_name).toBe('Jane D.')
   })
 
-  it('logs when resolving coverage_request_shift_id via keySimple fallback (null classroom on CRS)', async () => {
+  it('logs when resolving coverage_request_shift_id via unique keySimple fallback (null classroom on CRS)', async () => {
     const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
     ;(getSchoolClosuresForDateRange as jest.Mock).mockResolvedValue([])
     ;(getTeacherShiftsForAssignSub as jest.Mock).mockResolvedValue([
@@ -262,6 +262,7 @@ describe('POST /api/assign-sub/shifts', () => {
         time_off_request_id: 'tor-1',
       },
     ])
+
     const timeOffChain = {
       select: jest.fn().mockReturnThis(),
       in: jest.fn().mockResolvedValue({
@@ -310,11 +311,159 @@ describe('POST /api/assign-sub/shifts', () => {
     expect(response.status).toBe(200)
     expect(json.shifts[0].coverage_request_shift_id).toBe('crs-legacy')
     expect(warnSpy).toHaveBeenCalledWith(
-      '[assign-sub/shifts] Used keySimple fallback for coverage_request_shift lookup',
+      '[assign-sub/shifts] Used unique keySimple fallback for lookup',
       expect.objectContaining({
         teacher_id: 'teacher-1',
-        keyFull: '2026-03-10|AM|class-1',
-        keySimple: '2026-03-10|AM',
+        keyFullBySlotId: '2026-03-10|slot-1|class-1',
+        keySimpleBySlotId: '2026-03-10|slot-1',
+        time_off_request_id: 'tor-1',
+      })
+    )
+    warnSpy.mockRestore()
+  })
+
+  it('resolves coverage_request_shift_id using time_slot_id keys when time_slot_code mapping is unavailable', async () => {
+    ;(getSchoolClosuresForDateRange as jest.Mock).mockResolvedValue([])
+    ;(getTeacherShiftsForAssignSub as jest.Mock).mockResolvedValue([
+      {
+        id: '2026-03-10|dow-2|slot-1',
+        date: '2026-03-10',
+        day_of_week_id: 'dow-2',
+        time_slot_id: 'slot-1',
+        time_slot_code: '',
+        classroom_id: 'class-1',
+        has_time_off: true,
+        time_off_request_id: 'tor-1',
+      },
+    ])
+
+    const timeOffChain = {
+      select: jest.fn().mockReturnThis(),
+      in: jest.fn().mockResolvedValue({
+        data: [{ id: 'tor-1', coverage_request_id: 'cr-1' }],
+      }),
+    }
+    const coverageShiftsChain = {
+      select: jest.fn().mockReturnThis(),
+      in: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockResolvedValue({
+        data: [
+          {
+            id: 'crs-1',
+            coverage_request_id: 'cr-1',
+            date: '2026-03-10',
+            time_slot_id: 'slot-1',
+            classroom_id: 'class-1',
+            time_slots: { code: 'AM' },
+          },
+        ],
+      }),
+    }
+    const subAssignmentsChain = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      gte: jest.fn().mockReturnThis(),
+      lte: jest.fn().mockResolvedValue({ data: [] }),
+    }
+    ;(createClient as jest.Mock).mockResolvedValue({
+      from: jest.fn((table: string) => {
+        if (table === 'time_off_requests') return timeOffChain
+        if (table === 'coverage_request_shifts') return coverageShiftsChain
+        if (table === 'sub_assignments') return subAssignmentsChain
+        throw new Error(`Unexpected table: ${table}`)
+      }),
+    })
+
+    const request = createJsonRequest('http://localhost:3000/api/assign-sub/shifts', 'POST', {
+      teacher_id: 'teacher-1',
+      start_date: '2026-03-10',
+      end_date: '2026-03-10',
+    })
+    const response = await POST(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(json.shifts).toHaveLength(1)
+    expect(json.shifts[0].coverage_request_shift_id).toBe('crs-1')
+  })
+
+  it('refuses keySimple fallback when multiple candidate shifts exist for the same date/time slot', async () => {
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+    ;(getSchoolClosuresForDateRange as jest.Mock).mockResolvedValue([])
+    ;(getTeacherShiftsForAssignSub as jest.Mock).mockResolvedValue([
+      {
+        id: '2026-03-10|dow-2|slot-1|class-1',
+        date: '2026-03-10',
+        day_of_week_id: 'dow-2',
+        time_slot_id: 'slot-1',
+        time_slot_code: 'AM',
+        classroom_id: 'class-1',
+        has_time_off: true,
+        time_off_request_id: 'tor-1',
+      },
+    ])
+
+    const timeOffChain = {
+      select: jest.fn().mockReturnThis(),
+      in: jest.fn().mockResolvedValue({
+        data: [{ id: 'tor-1', coverage_request_id: 'cr-1' }],
+      }),
+    }
+    const coverageShiftsChain = {
+      select: jest.fn().mockReturnThis(),
+      in: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockResolvedValue({
+        data: [
+          {
+            id: 'crs-legacy-1',
+            coverage_request_id: 'cr-1',
+            date: '2026-03-10',
+            time_slot_id: 'slot-1',
+            classroom_id: null,
+            time_slots: { code: 'AM' },
+          },
+          {
+            id: 'crs-legacy-2',
+            coverage_request_id: 'cr-1',
+            date: '2026-03-10',
+            time_slot_id: 'slot-1',
+            classroom_id: null,
+            time_slots: { code: 'AM' },
+          },
+        ],
+      }),
+    }
+    const subAssignmentsChain = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      gte: jest.fn().mockReturnThis(),
+      lte: jest.fn().mockResolvedValue({ data: [] }),
+    }
+    ;(createClient as jest.Mock).mockResolvedValue({
+      from: jest.fn((table: string) => {
+        if (table === 'time_off_requests') return timeOffChain
+        if (table === 'coverage_request_shifts') return coverageShiftsChain
+        if (table === 'sub_assignments') return subAssignmentsChain
+        throw new Error(`Unexpected table: ${table}`)
+      }),
+    })
+
+    const request = createJsonRequest('http://localhost:3000/api/assign-sub/shifts', 'POST', {
+      teacher_id: 'teacher-1',
+      start_date: '2026-03-10',
+      end_date: '2026-03-10',
+    })
+    const response = await POST(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(json.shifts).toHaveLength(1)
+    expect(json.shifts[0].coverage_request_shift_id).toBeUndefined()
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[assign-sub/shifts] Ambiguous keySimple fallback; refusing to auto-resolve coverage_request_shift_id',
+      expect.objectContaining({
+        teacher_id: 'teacher-1',
+        keySimpleBySlotId: '2026-03-10|slot-1',
         time_off_request_id: 'tor-1',
       })
     )

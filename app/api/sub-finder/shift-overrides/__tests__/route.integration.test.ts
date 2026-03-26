@@ -159,4 +159,58 @@ describe('POST /api/sub-finder/shift-overrides integration', () => {
     expect(json.selected_shift_ids).toEqual(['shift-overlap'])
     expect(json.shift_overrides).toHaveLength(1)
   })
+
+  it('resolves classroom-specific keys without collapsing same date/time across classrooms', async () => {
+    mockEq.mockResolvedValueOnce({
+      data: [
+        {
+          id: 'shift-class-a',
+          date: '2026-02-13',
+          time_slot_id: 'slot-1',
+          classroom_id: 'class-a',
+          time_slots: { code: 'AM' },
+        },
+        {
+          id: 'shift-class-b',
+          date: '2026-02-13',
+          time_slot_id: 'slot-1',
+          classroom_id: 'class-b',
+          time_slots: { code: 'AM' },
+        },
+      ],
+      error: null,
+    })
+
+    const request = createJsonRequest(
+      'http://localhost:3000/api/sub-finder/shift-overrides',
+      'POST',
+      {
+        coverage_request_id: 'coverage-1',
+        selected_shift_keys: ['2026-02-13|AM|class-a'],
+        override_shift_keys: [],
+        available_shift_keys: ['2026-02-13|AM|class-a', '2026-02-13|AM|class-b'],
+        unavailable_shift_keys: [],
+      }
+    )
+
+    const response = await POST(request as any)
+    const json = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(json.selected_shift_ids).toEqual(['shift-class-a'])
+    expect(json.shift_overrides).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          coverage_request_shift_id: 'shift-class-a',
+          selected: true,
+          shift_key: '2026-02-13|AM|class-a',
+        }),
+        expect.objectContaining({
+          coverage_request_shift_id: 'shift-class-b',
+          selected: false,
+          shift_key: '2026-02-13|AM|class-b',
+        }),
+      ])
+    )
+  })
 })

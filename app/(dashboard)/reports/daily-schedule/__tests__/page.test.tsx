@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import DailyScheduleReportPage from '@/app/(dashboard)/reports/daily-schedule/page'
 import { useDailySchedule } from '@/lib/hooks/use-daily-schedule'
+import { adminRoleColorValues } from '@/lib/utils/colors'
 
 const replaceMock = jest.fn()
 const openMock = jest.fn()
@@ -734,5 +735,140 @@ describe("Today's Schedule report page", () => {
     expect(reassignedRow).toHaveTextContent('Jenn S. *')
     expect(reassignedName).toHaveClass('line-through')
     expect(reassignedRow).not.toHaveClass('line-through')
+  })
+
+  it('shows Admin in legend and renders admin assignment rows in admin color', async () => {
+    ;(useDailySchedule as jest.Mock).mockReturnValue({
+      data: {
+        date: '2026-03-09',
+        day_of_week_id: 'day-mon',
+        day_name: 'Monday',
+        data: [
+          {
+            classroom_id: 'classroom-1',
+            classroom_name: 'Infant Room',
+            classroom_color: '#1d4ed8',
+            classroom_is_active: true,
+            days: [
+              {
+                day_of_week_id: 'day-mon',
+                day_name: 'Monday',
+                day_number: 1,
+                time_slots: [
+                  {
+                    time_slot_id: 'slot-am',
+                    time_slot_code: 'AM',
+                    time_slot_name: 'School Morning',
+                    time_slot_display_order: 1,
+                    time_slot_start_time: '09:00:00',
+                    time_slot_end_time: '12:00:00',
+                    time_slot_is_active: true,
+                    assignments: [
+                      {
+                        id: 'admin-assignment-1',
+                        teacher_id: 'admin-1',
+                        teacher_name: 'Admin User',
+                        teacher_first_name: 'Admin',
+                        teacher_last_name: 'User',
+                        teacher_display_name: 'Admin User',
+                        is_substitute: false,
+                        is_floater: false,
+                        is_flexible: false,
+                        is_admin: true,
+                        classroom_id: 'classroom-1',
+                        classroom_name: 'Infant Room',
+                      },
+                    ],
+                    absences: [],
+                    schedule_cell: null,
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+        school_closures: [],
+        no_schedule: false,
+      },
+      isLoading: false,
+      error: null,
+    })
+
+    render(<DailyScheduleReportPage />)
+
+    expect(await screen.findByText('Admin')).toBeInTheDocument()
+    const adminRow = screen.getByText('Admin User')
+    expect(adminRow).toHaveStyle({
+      color: adminRoleColorValues.text,
+    })
+  })
+
+  it('shows admin symbol in black-and-white mode legend and rows', async () => {
+    ;(useDailySchedule as jest.Mock).mockReturnValue({
+      data: {
+        date: '2026-03-09',
+        day_of_week_id: 'day-mon',
+        day_name: 'Monday',
+        data: [
+          {
+            classroom_id: 'classroom-1',
+            classroom_name: 'Infant Room',
+            classroom_color: '#1d4ed8',
+            classroom_is_active: true,
+            days: [
+              {
+                day_of_week_id: 'day-mon',
+                day_name: 'Monday',
+                day_number: 1,
+                time_slots: [
+                  {
+                    time_slot_id: 'slot-am',
+                    time_slot_code: 'AM',
+                    time_slot_name: 'School Morning',
+                    time_slot_display_order: 1,
+                    time_slot_start_time: '09:00:00',
+                    time_slot_end_time: '12:00:00',
+                    time_slot_is_active: true,
+                    assignments: [
+                      {
+                        id: 'admin-assignment-1',
+                        teacher_id: 'admin-1',
+                        teacher_name: 'Admin User',
+                        teacher_first_name: 'Admin',
+                        teacher_last_name: 'User',
+                        teacher_display_name: 'Admin User',
+                        is_substitute: false,
+                        is_floater: false,
+                        is_flexible: false,
+                        is_admin: true,
+                        classroom_id: 'classroom-1',
+                        classroom_name: 'Infant Room',
+                      },
+                    ],
+                    absences: [],
+                    schedule_cell: null,
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+        school_closures: [],
+        no_schedule: false,
+      },
+      isLoading: false,
+      error: null,
+    })
+
+    render(<DailyScheduleReportPage />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Black & White' }))
+
+    const symbols = await screen.findAllByText('▣')
+    expect(symbols.length).toBeGreaterThanOrEqual(2)
+    expect(screen.getByText('Admin')).toBeInTheDocument()
+    const adminName = screen.getByText('Admin User')
+    expect(adminName).toBeInTheDocument()
+    expect(adminName.closest('span')?.parentElement?.textContent ?? '').toContain('▣')
   })
 })

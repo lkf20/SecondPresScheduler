@@ -4,6 +4,7 @@ import React from 'react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { adminRoleColorValues } from '@/lib/utils/colors'
 
 export type StaffChipVariant =
   | 'absent'
@@ -14,6 +15,7 @@ export type StaffChipVariant =
   | 'floater'
   | 'tempCoverage'
   | 'breakCoverage'
+  | 'admin'
 
 export interface StaffChipProps {
   /** Staff member ID. When present and navigable, chip links to /staff/[id]. */
@@ -39,6 +41,7 @@ const VARIANT_CLASSES: Record<StaffChipVariant, string> = {
   floater: 'bg-purple-100 text-purple-800 border border-purple-300 border-dashed',
   tempCoverage: 'bg-[#fdf2f8] text-pink-700 border border-[#f9a8d4] border-dashed',
   breakCoverage: 'bg-indigo-50 text-indigo-700 border border-indigo-300 border-dashed',
+  admin: 'border',
 }
 
 const VARIANT_STYLES: Partial<Record<StaffChipVariant, React.CSSProperties>> = {
@@ -53,6 +56,11 @@ const VARIANT_STYLES: Partial<Record<StaffChipVariant, React.CSSProperties>> = {
     borderColor: '#a5b4fc',
     backgroundColor: '#eef2ff',
     color: '#4338ca',
+  },
+  admin: {
+    backgroundColor: adminRoleColorValues.bg,
+    borderColor: adminRoleColorValues.border,
+    color: adminRoleColorValues.text,
   },
 }
 

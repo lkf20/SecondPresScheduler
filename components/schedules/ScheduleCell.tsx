@@ -463,13 +463,21 @@ export default function ScheduleCell({
                 } else if (group.assignment) {
                   // Handle regular teachers and floaters (from assignments array)
                   const assignment = group.assignment
-                  let variant: 'permanent' | 'flex' | 'floater' | 'tempCoverage' | 'breakCoverage' =
-                    'permanent'
+                  let variant:
+                    | 'permanent'
+                    | 'flex'
+                    | 'floater'
+                    | 'tempCoverage'
+                    | 'breakCoverage'
+                    | 'admin' = 'permanent'
                   let title: string | undefined = undefined
 
                   if (assignment.is_floater) {
                     variant = 'floater'
                     title = 'Floater assignment'
+                  } else if (assignment.is_admin) {
+                    variant = 'admin'
+                    title = 'Admin'
                   } else if (assignment.is_flexible) {
                     if (assignment.staffing_event_id) {
                       if (assignment.event_category === 'break' && BREAK_COVERAGE_ENABLED) {

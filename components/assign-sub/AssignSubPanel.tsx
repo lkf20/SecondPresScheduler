@@ -201,6 +201,25 @@ export default function AssignSubPanel({
     setPartialTimes({})
   }, [])
 
+  const resolveCoverageRequestShiftId = useCallback(
+    (shift: Shift, shiftMap: Record<string, string>): string | undefined => {
+      if (shift.coverage_request_shift_id) return shift.coverage_request_shift_id
+
+      const date = shift.date
+      const slotId = shift.time_slot_id ?? ''
+      const slotCode = shift.time_slot_code ?? ''
+      const classroomId = shift.classroom_id ?? ''
+
+      return (
+        shiftMap[`${date}|${slotId}|${classroomId}`] ??
+        shiftMap[`${date}|${slotCode}|${classroomId}`] ??
+        shiftMap[`${date}|${slotId}`] ??
+        shiftMap[`${date}|${slotCode}`]
+      )
+    },
+    []
+  )
+
   // Get display name helper
   const getDisplayName = useCallback(
     (
@@ -815,6 +834,8 @@ export default function AssignSubPanel({
       }
 
       let totalAssigned = 0
+      let totalRequestedCoverageShifts = 0
+      let totalCollapsedDuplicateSelections = 0
 
       for (const [timeOffRequestId, shiftsInGroup] of shiftsByTimeOffRequest) {
         if (!timeOffRequestId) {
@@ -874,11 +895,12 @@ export default function AssignSubPanel({
           source_classroom_id: string
           time_slot_code?: string
         }> = []
+        const unresolvedShifts: Shift[] = []
+        const resolvedIdsForGroup: string[] = []
         for (const s of shiftsInGroup) {
-          const keyWithClass = `${s.date}|${s.time_slot_code ?? ''}|${s.classroom_id ?? ''}`
-          const keySimple = `${s.date}|${s.time_slot_code ?? ''}`
-          const id = s.coverage_request_shift_id ?? shiftMap[keyWithClass] ?? shiftMap[keySimple]
+          const id = resolveCoverageRequestShiftId(s, shiftMap)
           if (id) {
+            resolvedIdsForGroup.push(id)
             const slotKey = `${s.date}|${s.time_slot_id}`
             const group = shiftGroups.find(g => g.slotKey === slotKey)
             const isMultiRoomSlot = group ? group.shifts.length > 1 : false
@@ -925,7 +947,21 @@ export default function AssignSubPanel({
             } else {
               fullCoverageRequestShiftIds.push(id)
             }
+          } else {
+            unresolvedShifts.push(s)
           }
+        }
+
+        if (unresolvedShifts.length > 0) {
+          const labels = unresolvedShifts
+            .slice(0, 2)
+            .map(s => `${formatDate(s.date)} ${s.time_slot_code ?? ''}`.trim())
+            .join(', ')
+          throw new Error(
+            `Could not resolve ${unresolvedShifts.length} selected shift${
+              unresolvedShifts.length === 1 ? '' : 's'
+            } for assignment${labels ? ` (${labels})` : ''}. Please refresh and try again.`
+          )
         }
 
         const coverageRequestShiftIds = Array.from(
@@ -933,6 +969,13 @@ export default function AssignSubPanel({
             ...fullCoverageRequestShiftIds,
             ...partialAssignmentsForRequest.map(p => p.shift_id),
           ])
+        )
+        totalRequestedCoverageShifts +=
+          coverageRequestShiftIds.length + reassignmentsForRequest.length
+        const uniqueResolvedForGroup = new Set(resolvedIdsForGroup)
+        totalCollapsedDuplicateSelections += Math.max(
+          0,
+          resolvedIdsForGroup.length - uniqueResolvedForGroup.size
         )
         if (coverageRequestShiftIds.length === 0 && reassignmentsForRequest.length === 0) continue
 
@@ -959,9 +1002,7 @@ export default function AssignSubPanel({
         if (reassignmentsForRequest.length > 0) {
           const shiftByCoverageId = new Map<string, Shift>()
           for (const s of shiftsInGroup) {
-            const keyWithClass = `${s.date}|${s.time_slot_code ?? ''}|${s.classroom_id ?? ''}`
-            const keySimple = `${s.date}|${s.time_slot_code ?? ''}`
-            const mappedId = shiftMap[keyWithClass] ?? shiftMap[keySimple]
+            const mappedId = resolveCoverageRequestShiftId(s, shiftMap)
             if (mappedId) shiftByCoverageId.set(mappedId, s)
           }
 
@@ -1053,7 +1094,8 @@ export default function AssignSubPanel({
       const teacher = teachers.find(t => t.id === teacherId)
       const subName = getDisplayName(sub)
       const teacherName = getDisplayName(teacher)
-      const requestedShiftCount = selectedShiftIds.size
+      const requestedShiftCount =
+        totalRequestedCoverageShifts > 0 ? totalRequestedCoverageShifts : selectedShiftIds.size
       const assignedShiftCount = assignResult?.assignments_created ?? requestedShiftCount
       const skippedShiftCount = Math.max(0, requestedShiftCount - assignedShiftCount)
 
@@ -1077,7 +1119,15 @@ export default function AssignSubPanel({
 
       toast.success(
         `Assigned ${subName} to ${assignedShiftCount} shift${assignedShiftCount !== 1 ? 's' : ''} for ${teacherName}${
-          skippedShiftCount > 0 ? ` (${skippedShiftCount} already assigned and skipped).` : ''
+          skippedShiftCount > 0
+            ? ` (${skippedShiftCount} selected shift${skippedShiftCount === 1 ? '' : 's'} could not be assigned).`
+            : ''
+        }${
+          totalCollapsedDuplicateSelections > 0
+            ? ` (${totalCollapsedDuplicateSelections} duplicate selection${
+                totalCollapsedDuplicateSelections === 1 ? '' : 's'
+              } merged).`
+            : ''
         }${selectedSubIsNonSub ? ' (non-sub override).' : ''}${
           shiftsWithoutTimeOff.length > 0
             ? `. Time off request created for ${shiftsWithoutTimeOff.length} shift${shiftsWithoutTimeOff.length !== 1 ? 's' : ''}.`

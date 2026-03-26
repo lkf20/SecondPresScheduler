@@ -20,12 +20,14 @@ import SubCardHeader from '@/components/sub-finder/SubCardHeader'
 import { formatUSPhone, getPhoneDigits } from '@/lib/utils/phone'
 import { cn } from '@/lib/utils'
 import type { SubFinderShift } from '@/lib/sub-finder/types'
+import { getShiftKey } from '@/lib/sub-finder/shift-helpers'
 import { sortShiftDetailsByDisplayOrder } from '@/lib/utils/shift-display-order'
 
 type Shift = {
   date: string
   day_name?: string
   time_slot_code: string
+  classroom_id?: string | null
   class_name?: string | null
   classroom_name?: string | null
   classroom_color?: string | null
@@ -132,20 +134,13 @@ export default function SubFinderCard({
   const [noteDraft, setNoteDraft] = useState(notes || '')
   const [isSavingNote, setIsSavingNote] = useState(false)
   const coveredSegments = Math.min(shiftsCovered, totalShifts)
-  const thisSubAssignedKeys = new Set(
-    allAssigned.map(shift => `${shift.date}|${shift.time_slot_code}`)
-  )
-  const thisSubCanCoverKeys = new Set(
-    allCanCover.map(shift => `${shift.date}|${shift.time_slot_code}`)
-  )
+  const thisSubAssignedKeys = new Set(allAssigned.map(shift => getShiftKey(shift)))
+  const thisSubCanCoverKeys = new Set(allCanCover.map(shift => getShiftKey(shift)))
   const recommendedShiftKeys = new Set(
-    (recommendedShifts ?? canCover).map(shift => `${shift.date}|${shift.time_slot_code}`)
+    (recommendedShifts ?? canCover).map(shift => getShiftKey(shift))
   )
   const thisSubCannotCoverReason = new Map(
-    allCannotCover.map(shift => [
-      `${shift.date}|${shift.time_slot_code}`,
-      shift.reason ?? undefined,
-    ])
+    allCannotCover.map(shift => [getShiftKey(shift), shift.reason ?? undefined])
   )
 
   const isAssigned = assigned.length > 0
@@ -305,7 +300,7 @@ export default function SubFinderCard({
               cannotCover={allCannotCover}
               thisSubName={name}
               shifts={orderedShiftsForStrip.map(shift => {
-                const key = `${shift.date}|${shift.time_slot_code}`
+                const key = getShiftKey(shift)
                 const explicitlyCannotCover = thisSubCannotCoverReason.has(key)
                 const canCoverThisSub =
                   thisSubAssignedKeys.has(key) ||
@@ -528,7 +523,7 @@ export default function SubFinderCard({
                 cannotCover={allCannotCover}
                 thisSubName={name}
                 shifts={allShifts.map(shift => {
-                  const key = `${shift.date}|${shift.time_slot_code}`
+                  const key = getShiftKey(shift)
                   const explicitlyCannotCover = thisSubCannotCoverReason.has(key)
                   const canCoverThisSub =
                     thisSubAssignedKeys.has(key) || thisSubCanCoverKeys.has(key)

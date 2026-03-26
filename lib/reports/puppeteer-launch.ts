@@ -145,10 +145,10 @@ export const launchPdfBrowser = async () => {
 
   const failures: string[] = []
   const launchWithTimeout = async (attempt: LaunchOptions, attemptNumber: number) => {
-    return Promise.race([
-      puppeteer.launch(attempt),
-      new Promise<never>((_, reject) =>
-        setTimeout(
+    let timeoutHandle: ReturnType<typeof setTimeout> | null = null
+    try {
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutHandle = setTimeout(
           () =>
             reject(
               new Error(
@@ -157,8 +157,15 @@ export const launchPdfBrowser = async () => {
             ),
           LOCAL_LAUNCH_ATTEMPT_TIMEOUT_MS
         )
-      ),
-    ])
+        timeoutHandle.unref?.()
+      })
+
+      return await Promise.race([puppeteer.launch(attempt), timeoutPromise])
+    } finally {
+      if (timeoutHandle) {
+        clearTimeout(timeoutHandle)
+      }
+    }
   }
 
   for (let index = 0; index < localAttempts.length; index += 1) {
