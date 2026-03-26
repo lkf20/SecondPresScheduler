@@ -12,13 +12,16 @@ export const runPdfStep = async <T>(
   timeoutMs = 120000
 ): Promise<T> => {
   const started = Date.now()
+  let timeoutHandle: ReturnType<typeof setTimeout> | null = null
   try {
-    const result = await Promise.race([
-      fn(),
-      new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error(`${name} timed out after ${timeoutMs}ms`)), timeoutMs)
-      }),
-    ])
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutHandle = setTimeout(
+        () => reject(new Error(`${name} timed out after ${timeoutMs}ms`)),
+        timeoutMs
+      )
+      timeoutHandle.unref?.()
+    })
+    const result = await Promise.race([fn(), timeoutPromise])
     steps.push({ name, ms: Date.now() - started, ok: true })
     return result
   } catch (error) {
@@ -29,5 +32,9 @@ export const runPdfStep = async <T>(
       error: error instanceof Error ? error.message : String(error),
     })
     throw error
+  } finally {
+    if (timeoutHandle) {
+      clearTimeout(timeoutHandle)
+    }
   }
 }
